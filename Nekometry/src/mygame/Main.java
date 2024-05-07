@@ -1,6 +1,7 @@
 package mygame;
 
 import com.jme3.app.SimpleApplication;
+import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
@@ -9,14 +10,17 @@ import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.RenderManager;
+import com.jme3.scene.CameraNode;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
+import com.jme3.scene.control.CameraControl.ControlDirection;
 import com.jme3.scene.shape.Box;
 
 public class Main extends SimpleApplication {
 
     Node sown;
+    CameraNode camNode;
     boolean moverAdelante = false;
     boolean moverAtras = false;
     boolean moverIzq = false;
@@ -24,7 +28,7 @@ public class Main extends SimpleApplication {
     
     boolean dashActivado = false;
     float duracionDash = 0.5f; // Duración del dash en s
-    float cooldownDash = 2.0f; // Tiempo de enfriamiento del dash s
+    float cooldownDash = 2.5f; // Tiempo de enfriamiento del dash s
     float tiempoTranscurridoDash = 0f; // Tiempo desde que se activó el Dash
     float tiempoTranscurridoCooldown = 0f; // Tiempo desde que se desactivó el Dash
 
@@ -35,7 +39,9 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-        flyCam.setMoveSpeed(10f);
+        //flyCam.setEnabled(false);
+        flyCam.setMoveSpeed(10);
+        
         inputManager.addMapping("Dash", new KeyTrigger(KeyInput.KEY_LSHIFT));
         inputManager.addListener(actionListener, "Dash");
 
@@ -74,10 +80,19 @@ public class Main extends SimpleApplication {
         // Posicionar el suelo debajo del personaje
         floorGeometry.setLocalTranslation(0, -0.1f, 0);
         
-        // Actualizar la posición de la cámara para que siga al personaje
-        cam.setLocation(sown.getWorldTranslation().add(new Vector3f(0, 7, -5)));
-        // Hacer que la cámara mire al personaje
-        cam.lookAt(sown.getWorldTranslation(), Vector3f.UNIT_Y); 
+        //camara
+        // Disable the default flyby cam
+        flyCam.setEnabled(false);
+        //create the camera Node
+        camNode = new CameraNode("Camera Node", cam);
+        //This mode means that camera copies the movements of the target:
+        camNode.setControlDir(ControlDirection.SpatialToCamera);
+        //Attach the camNode to the target:
+        sown.attachChild(camNode);
+        //Move camNode, e.g. behind and above the target:
+        camNode.setLocalTranslation(new Vector3f(0, 3, -7));
+        //Rotate the camNode to look at the target:
+        camNode.lookAt(sown.getLocalTranslation(), Vector3f.UNIT_Y);
     }
     
     private final ActionListener actionListener = new ActionListener() {
@@ -109,7 +124,7 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
-        float vel_mov_normal = 10f; // Velocidad de movimiento normal
+        float vel_mov_normal = 8f; // Velocidad de movimiento normal
         float vel_mov_dash = 30f; // Velocidad de movimiento del Dash
 
         if (dashActivado) {
@@ -147,14 +162,8 @@ public class Main extends SimpleApplication {
         // Mover a la derecha 
         if (moverDer) {
             sown.move(-vel_mov_actual * tpf, 0, 0);
-        }   
-        
-        // Actualizar la posición de la cámara para seguir al personaje en tercera persona
-        Vector3f camDir = cam.getDirection().clone().multLocal(-5); // Distancia detrás del personaje
-        Vector3f camOffset = sown.getWorldTranslation().add(new Vector3f(0, 2, -4)); // Offset vertical
-        cam.setLocation(camOffset.add(camDir));
-        cam.lookAt(sown.getWorldTranslation(), Vector3f.UNIT_Y); // Hacer que la cámara mire al personaje
-    }
+        }
+    }   
 
     @Override
     public void simpleRender(RenderManager rm) {

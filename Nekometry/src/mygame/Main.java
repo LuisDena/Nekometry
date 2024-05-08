@@ -6,6 +6,7 @@ import com.jme3.input.KeyInput;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
 import com.jme3.input.controls.ActionListener;
+import com.jme3.input.controls.AnalogListener;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
@@ -21,10 +22,8 @@ public class Main extends SimpleApplication {
 
     Node sown;
     CameraNode camNode;
-    boolean moverAdelante = false;
-    boolean moverAtras = false;
-    boolean moverIzq = false;
-    boolean moverDer = false;
+    
+    float velocidadMov = 10f;
     
     boolean dashActivado = false;
     float duracionDash = 0.5f; // Duración del dash en s
@@ -39,21 +38,22 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-        //flyCam.setEnabled(false);
-        flyCam.setMoveSpeed(10);
+        
+        //inputManager.deleteMapping( SimpleApplication.INPUT_MAPPING_MEMORY);
         
         inputManager.addMapping("Dash", new KeyTrigger(KeyInput.KEY_LSHIFT));
         inputManager.addListener(actionListener, "Dash");
 
-        //Asignar las teclas de movimiento
+        //Asignar las teclas de movimiento del personaje
         inputManager.addMapping("Mover_Adelante", new KeyTrigger(KeyInput.KEY_W));
         inputManager.addMapping("Mover_Atras", new KeyTrigger(KeyInput.KEY_S));
         inputManager.addMapping("Mover_Izq", new KeyTrigger(KeyInput.KEY_A));
         inputManager.addMapping("Mover_Der", new KeyTrigger(KeyInput.KEY_D));
         
-        //Añadir los Listeners
-        inputManager.addListener(actionListener, "Mover_Adelante", "Mover_Atras",
+        //Añadir los Listeners de movimiento
+        inputManager.addListener(analogListener, "Mover_Adelante", "Mover_Atras",
                 "Mover_Izq", "Mover_Der");
+        
         
         // Crear y añadir una luz direccional
         DirectionalLight dl = new DirectionalLight();
@@ -80,7 +80,7 @@ public class Main extends SimpleApplication {
         // Posicionar el suelo debajo del personaje
         floorGeometry.setLocalTranslation(0, -0.1f, 0);
         
-        //camara
+        // Cámara
         // Disable the default flyby cam
         flyCam.setEnabled(false);
         //create the camera Node
@@ -95,6 +95,8 @@ public class Main extends SimpleApplication {
         camNode.lookAt(sown.getLocalTranslation(), Vector3f.UNIT_Y);
     }
     
+    // Action para acciones absolutas, presionado o soltado, encendido o apagado
+    //Ejemplos: pausar/reanudar, un disparo de rifle o revólver, saltar, hacer clic para seleccionar.
     private final ActionListener actionListener = new ActionListener() {
         @Override
         public void onAction(String name, boolean isPressed, float tpf) {
@@ -103,65 +105,51 @@ public class Main extends SimpleApplication {
                 dashActivado = true;
                 tiempoTranscurridoDash = 0f;
             }
+        }
+    };
+
+    // Analog para movimientos continuos o progresivos
+    private final AnalogListener analogListener = new AnalogListener() {
+        @Override
+        public void onAnalog(String name, float value, float tpf) {
+            if (name.equals("Mover_Adelante")) {
+                float velocidad = 10f; // Velocidad de movimiento
+                sown.move(0, 0, velocidad * value);
+            }
             switch (name) {
                 case "Mover_Adelante":
-                    moverAdelante = isPressed;
+                    sown.move(0, 0, velocidadMov * value );
                     break;
                 case "Mover_Atras":
-                    moverAtras = isPressed;
+                    sown.move(0, 0, -velocidadMov * value );
                     break;
                 case "Mover_Izq":
-                    moverIzq = isPressed;
+                    sown.move(velocidadMov * value , 0,0 );
                     break;
                 case "Mover_Der":
-                    moverDer = isPressed;
+                    sown.move(-velocidadMov * value, 0,0 );
                     break;
                 default:
                     break;
             }
+            
         }
     };
-
+    
     @Override
     public void simpleUpdate(float tpf) {
-        float vel_mov_normal = 8f; // Velocidad de movimiento normal
-        float vel_mov_dash = 30f; // Velocidad de movimiento del Dash
-
         if (dashActivado) {
             tiempoTranscurridoDash += tpf;
             if (tiempoTranscurridoDash >= duracionDash) {
                 dashActivado = false;
                 tiempoTranscurridoCooldown = 0f; // Reiniciar el cooldown
+            } else {
+                // Lógica de movimiento durante el dash
+                float velocidadDash = 30f; // Velocidad de dash 
+                sown.move(0, 0, velocidadDash * tpf);
             }
         } else {
             tiempoTranscurridoCooldown += tpf;
-        }
-
-        float vel_mov_actual;//La velocidad actual
-        if (dashActivado) {
-            vel_mov_actual = vel_mov_dash;
-        } else {
-            vel_mov_actual = vel_mov_normal;
-        } 
-
-        // Mover hacia adelante 
-        if (moverAdelante) {
-            sown.move(0, 0, vel_mov_actual * tpf);
-        }
-
-        // Mover hacia atrás 
-        if (moverAtras) {
-            sown.move(0, 0, -vel_mov_actual * tpf);
-        }
-
-        // Mover a la izquierda 
-        if (moverIzq) {
-            sown.move(vel_mov_actual * tpf, 0, 0);
-        }
-
-        // Mover a la derecha 
-        if (moverDer) {
-            sown.move(-vel_mov_actual * tpf, 0, 0);
         }
     }   
 

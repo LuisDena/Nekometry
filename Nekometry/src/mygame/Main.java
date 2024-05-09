@@ -1,6 +1,11 @@
 package mygame;
 
+import com.jme3.animation.AnimChannel;
+import com.jme3.animation.AnimControl;
+import com.jme3.animation.AnimEventListener;
 import com.jme3.app.SimpleApplication;
+import com.jme3.bullet.BulletAppState;
+import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.KeyTrigger;
@@ -30,6 +35,8 @@ public class Main extends SimpleApplication {
     float cooldownDash = 2.5f; // Tiempo de enfriamiento del dash s
     float tiempoTranscurridoDash = 0f; // Tiempo desde que se activó el Dash
     float tiempoTranscurridoCooldown = 0f; // Tiempo desde que se desactivó el Dash
+    
+    BulletAppState bulletAppState; // Declaración de la variable bulletAppState
 
     public static void main(String[] args) {
         Main app = new Main();
@@ -38,9 +45,7 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-        
-        //inputManager.deleteMapping( SimpleApplication.INPUT_MAPPING_MEMORY);
-        
+        //Dash
         inputManager.addMapping("Dash", new KeyTrigger(KeyInput.KEY_LSHIFT));
         inputManager.addListener(actionListener, "Dash");
 
@@ -57,28 +62,35 @@ public class Main extends SimpleApplication {
         
         // Crear y añadir una luz direccional
         DirectionalLight dl = new DirectionalLight();
-        dl.setDirection(new Vector3f(-0.5f, -1f, -1).normalizeLocal());
+        dl.setDirection(new Vector3f(-2f, -1f, -1).normalizeLocal());
         rootNode.addLight(dl);
 
         // Cargar el modelo con su material desde el archivo 
         Spatial sown_model = assetManager.loadModel("Models/sown.j3o");
         sown_model.setLocalScale(0.5f);
         
+        
+        //Agregar físicas/Colisiones al personaje
+        
         // Crear un nodo para el modelo y agregarlo al nodo raíz
         sown = new Node("sown_node");
+        sown.setLocalTranslation(-30f, 0, -19f);
         sown.attachChild(sown_model);
         rootNode.attachChild(sown);
         
-        // Crear el suelo
-        Box floorMesh = new Box(20, 0.1f, 20);
-        Geometry floorGeometry = new Geometry("Floor", floorMesh);
-        Material floorMaterial = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        floorMaterial.setColor("Color", ColorRGBA.Gray);
-        floorGeometry.setMaterial(floorMaterial);
-        rootNode.attachChild(floorGeometry);
+        //Mapa
+        Node map = new Node("map_node");
+        Spatial map_model = assetManager.loadModel("Models/scene.j3o");
+        map.attachChild(map_model);
+        map.setLocalScale(10f);
+        rootNode.attachChild(map);
 
-        // Posicionar el suelo debajo del personaje
-        floorGeometry.setLocalTranslation(0, -0.1f, 0);
+        // Añadir físicas/colisiones al mapa
+        bulletAppState = new BulletAppState();
+        stateManager.attach(bulletAppState);
+        RigidBodyControl mapControl = new RigidBodyControl(0f); // Masa cero para que el mapa no sea afectado por la gravedad
+        map.addControl(mapControl);
+        bulletAppState.getPhysicsSpace().add(mapControl);
         
         // Cámara
         // Disable the default flyby cam

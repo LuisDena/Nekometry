@@ -1,12 +1,12 @@
+
 package mygame;
 
-import com.jme3.animation.AnimChannel;
-import com.jme3.animation.AnimControl;
-import com.jme3.animation.AnimEventListener;
+import com.jme3.anim.AnimComposer;
 import com.jme3.app.SimpleApplication;
 import com.jme3.bullet.BulletAppState;
-import com.jme3.bullet.collision.shapes.CapsuleCollisionShape;
+
 import com.jme3.bullet.collision.shapes.CollisionShape;
+import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.input.KeyInput;
@@ -17,22 +17,30 @@ import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.AmbientLight;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
-import com.jme3.post.FilterPostProcessor;
+
 import com.jme3.renderer.RenderManager;
 import com.jme3.scene.CameraNode;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import com.jme3.scene.control.CameraControl.ControlDirection;
-import com.jme3.shadow.DirectionalLightShadowRenderer;
-import com.jme3.util.SkyFactory;
+import com.jme3.system.AppSettings;
 
 public class Main extends SimpleApplication {
-
+    
+    
     Node sown;
     CameraNode camNode;
-
-    float velocidadCam = 200;
-    float velocidad = 0.6f; // Velocidad de movimiento
+    
+    private AnimComposer animComposer;
+    
+    private BetterCharacterControl playerSown;
+    private Vector3f walkDirection = new Vector3f(0,0,0); // stop
+    
+    private boolean adelante=false,atras=false,izq=false,der=false;
+    
+    float velocidadCam = 1.5f;
+    float velocidad = 30f; // Velocidad de movimiento
+    
 
     boolean dashActivado = false;
     boolean dashDirectionSet = false; // Indica si la dirección del dash ha sido establecida
@@ -42,23 +50,82 @@ public class Main extends SimpleApplication {
     float tiempoTranscurridoCooldown = 0f; // Tiempo desde que se desactivó el Dash
     float velocidadDash = 30f; // Velocidad de dash 
 
-    BulletAppState bulletAppState; // Declaración de la variable bulletAppState
+    BulletAppState fisica; // Declaración de la variable bulletAppState
 
     public static void main(String[] args) {
+        
+        AppSettings settings = new AppSettings(true);
+        settings.setTitle("Nekometry");
+        settings.setSettingsDialogImage("Interface/NekoIcon.png");
+        settings.setVSync(false);
+        
         Main app = new Main();
+        
+        app.setSettings(settings);
         app.start();
     }
+    
 
     @Override
     public void simpleInitApp() {
-        bulletAppState = new BulletAppState();
-        stateManager.attach(bulletAppState);
+        
+        /** Set up Physics */
+        fisica = new BulletAppState();
+        stateManager.attach(fisica);
+        //fisica.setDebugEnabled(true);
 
         setupKeys();
         setupLight();
         setupPlayer();
         setupMap();
         setupCamera();
+    }
+    
+    private void setupPlayer() {
+        Spatial sown_model = assetManager.loadModel("Models/SownFinal/SownFinal.j3o");
+        sown_model.setLocalScale(0.4f);
+
+        sown = new Node("sown_node");
+        
+        sown.attachChild(sown_model);
+
+        rootNode.attachChild(sown);
+        // Obtener el AnimComposer del modelo
+        animComposer = sown_model.getControl(AnimComposer.class);
+
+        // Agregar BetterCharacterControl al personaje con un BoxCollisionShape
+        
+        //-------------------------------------radio,altura,forma
+        playerSown = new BetterCharacterControl(0.6f,1.3f,0.4f); //forma
+        //playerSown.warp(new Vector3f(-20, 0, -19));
+        
+        sown.setLocalTranslation(-30f, 0, -19f);
+        
+        sown.addControl(playerSown);
+        playerSown.setGravity(new Vector3f(0, -9.81f, 0)); // -9.81f es la aceleración gravitacional estándar en la Tierra
+
+        // Agregar el control al BulletAppState para manejar las colisiones
+        fisica.getPhysicsSpace().add(playerSown);
+        
+    }
+    
+    private void setupMap() {
+        Node map = new Node("map_node");
+        Spatial map_model = assetManager.loadModel("Models/scene.j3o");
+        map_model.setLocalScale(10f);
+        
+        map.attachChild(map_model);
+        
+        CollisionShape sceneShape =
+                CollisionShapeFactory.createMeshShape(map_model);
+        
+        RigidBodyControl mapControl = new RigidBodyControl(sceneShape, 0);
+        map_model.addControl(mapControl);
+        
+        // Agrega el RigidBodyControl al BulletAppState
+        fisica.getPhysicsSpace().add(mapControl);
+        
+        rootNode.attachChild(map);
     }
 
     private void setupKeys() {
@@ -70,7 +137,8 @@ public class Main extends SimpleApplication {
         inputManager.addMapping("Mover_Izq", new KeyTrigger(KeyInput.KEY_A));
         inputManager.addMapping("Mover_Der", new KeyTrigger(KeyInput.KEY_D));
 
-        inputManager.addListener(analogListener, "Mover_Adelante", "Mover_Atras", "Mover_Izq", "Mover_Der");
+        inputManager.addListener(actionListener, "Mover_Adelante", "Mover_Atras");
+        inputManager.addListener(actionListener,"Mover_Izq", "Mover_Der");
     }
 
     private void setupLight() {
@@ -86,32 +154,9 @@ public class Main extends SimpleApplication {
         rootNode.addLight(dl);
       }
 
-    private void setupPlayer() {
-        Spatial sown_model = assetManager.loadModel("Models/sown.j3o");
-        sown_model.setLocalScale(0.5f);
-
-        sown = new Node("sown_node");
-        sown.setLocalTranslation(-30f,0, -19f);
-        sown.attachChild(sown_model);
-        rootNode.attachChild(sown);
-        
-    }
-
-    private void setupMap() {
-        Node map = new Node("map_node");
-        Spatial map_model = assetManager.loadModel("Models/scene.j3o");
-        map.attachChild(map_model);
-        map.setLocalScale(10f);
-        rootNode.attachChild(map);
-        CollisionShape sceneShape =
-                CollisionShapeFactory.createMeshShape(map_model);
-        RigidBodyControl mapControl = new RigidBodyControl(sceneShape, 0);
-        map_model.addControl(mapControl);
-    }
-
     private void setupCamera() {
-        flyCam.setEnabled(false);
-
+        flyCam.setEnabled(true);
+        
         camNode = new CameraNode("Camera Node", cam);
         camNode.setControlDir(ControlDirection.SpatialToCamera);
         sown.attachChild(camNode);
@@ -122,10 +167,14 @@ public class Main extends SimpleApplication {
     private final ActionListener actionListener = new ActionListener() {
         @Override
         public void onAction(String name, boolean isPressed, float tpf) {
-            if (name.equals("Dash") && isPressed && !dashActivado && tiempoTranscurridoCooldown >= cooldownDash) {
-                dashActivado = true;
-                tiempoTranscurridoDash = 0f;
-                dashDirectionSet = false; // Reiniciar la dirección del dash
+            if (name.equals("Mover_Izq")) {
+                izq = isPressed;
+            } else if (name.equals("Mover_Der")) {
+                der = isPressed;
+            } else if (name.equals("Mover_Adelante")) {
+                adelante = isPressed;
+            } else if (name.equals("Mover_Atras")) {
+                atras = isPressed;
             }
         }
     };
@@ -133,48 +182,52 @@ public class Main extends SimpleApplication {
     private final AnalogListener analogListener = new AnalogListener() {
         @Override
         public void onAnalog(String name, float value, float tpf) {
-            if (name.equals("Mover_Adelante")) {
-                
-                Vector3f direccionCamara = cam.getDirection().clone().multLocal(1, 0, 1).normalizeLocal();
-                direccionCamara.multLocal(velocidad);
-                sown.move(direccionCamara);
-            }
-            if (name.equals("Mover_Atras")) {
-                Vector3f direccionCamara = cam.getDirection().clone().multLocal(1, 0, 1).normalizeLocal();
-                direccionCamara.multLocal(-velocidad*0.3f);
-                sown.move(direccionCamara);
-            }
-            if (name.equals("Mover_Izq")) {
-                sown.rotate(0, velocidadCam * (value * tpf), 0); // Girar hacia la izquierda
-            }
-            if (name.equals("Mover_Der")) {
-                sown.rotate(0, -velocidadCam *(value * tpf), 0); // Girar hacia la derecha
-            }
+            
         }
     };
 
     private void handleDash(float tpf) {
-        if (dashActivado) {
-            tiempoTranscurridoDash += tpf;
-            if (tiempoTranscurridoDash >= duracionDash) {
-                dashActivado = false;
-                tiempoTranscurridoCooldown = 0f; // Reiniciar el cooldown
-            } else {
-                if (!dashDirectionSet) { // Si la dirección del dash no está establecida
-                    Vector3f direccionCamara = cam.getDirection().clone().multLocal(1, 0, 1).normalizeLocal();
-                    direccionCamara.multLocal(velocidadDash); // Multiplicar por la velocidad del dash
-                    dashDirectionSet = true; // Marcar la dirección del dash como establecida
-                    sown.setLocalTranslation(sown.getLocalTranslation().add(direccionCamara)); // Mover el personaje en la dirección de la cámara
-                }
-            }
-        } else {
-            tiempoTranscurridoCooldown += tpf;
+        
+    }
+    private void handleMovement(float tpf) {
+        // Calcula la dirección de movimiento basada en la entrada del usuario
+        Vector3f moveDirection = new Vector3f(0, 0, 0);
+        if (adelante) {
+            Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
+            moveDirection.addLocal(camDir);
         }
+        if (atras) {
+            Vector3f camOppositeDir = cam.getDirection().negate().mult(new Vector3f(1, 0, 1)).normalizeLocal();
+            moveDirection.addLocal(camOppositeDir);
+        }
+        if (izq) {
+            Vector3f camLeft = cam.getLeft().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
+            moveDirection.addLocal(camLeft);
+        }
+        if (der) {
+            Vector3f camRight = cam.getLeft().negate().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
+            moveDirection.addLocal(camRight);
+        }
+
+        // Normaliza la dirección de movimiento para mantener la misma velocidad en todas las direcciones
+        if (!moveDirection.equals(Vector3f.ZERO)) {
+            moveDirection.normalizeLocal();
+            moveDirection.multLocal(velocidad); // Multiplica por la velocidad de movimiento
+        }
+        // Obtiene la dirección de la cámara y rota al personaje hacia esa dirección
+        Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
+        playerSown.setViewDirection(camDir);
+
+
+        // Establece la dirección de movimiento al personaje
+        playerSown.setWalkDirection(moveDirection);
+        handleDash(tpf);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        handleDash(tpf);
+        handleMovement(tpf);
+        
     }
     /* Dash sin desaparecer
     @Override

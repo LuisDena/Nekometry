@@ -9,11 +9,15 @@ import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
+import com.jme3.effect.ParticleEmitter;
+import com.jme3.effect.ParticleMesh;
 import com.jme3.input.KeyInput;
+import com.jme3.input.MouseInput;
 import com.jme3.input.controls.ActionListener;
 
 import com.jme3.light.DirectionalLight;
 import com.jme3.input.controls.KeyTrigger;
+import com.jme3.input.controls.MouseButtonTrigger;
 import com.jme3.light.AmbientLight;
 import com.jme3.material.Material;
 
@@ -28,14 +32,20 @@ import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import com.jme3.scene.control.CameraControl.ControlDirection;
+import com.jme3.scene.shape.Box;
 import com.jme3.shadow.DirectionalLightShadowRenderer;
 import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
 import com.jme3.util.SkyFactory;
+import java.util.Random;
 
 
 public class Main extends SimpleApplication {
     
+    //spawncoords1= 90f, 0.1f, -30f
+    //spawncoords2= -51f, 0.1f, 90f
+    //spawncoords3= -50f, 0.1f, -90f
+    //spawncoords4= -100f, 0.1f, -30f
     
     private Node sown;
     private CameraNode camNode;
@@ -70,11 +80,11 @@ public class Main extends SimpleApplication {
         /** Set up Physics */
         fisica = new BulletAppState();
         stateManager.attach(fisica);
-        fisica.setDebugEnabled(true);
+        //fisica.setDebugEnabled(true);
         
         //getRootNode().attachChild(SkyFactory.createSky(getAssetManager(),
         //        "Models/cielo.jpg", SkyFactory.EnvMapType.CubeMap));
-        
+        spawnEnemies(1);
         setupKeys();
         setupPlayer();
         setupLight();
@@ -86,7 +96,6 @@ public class Main extends SimpleApplication {
     }
     
     private void setupPlayer() {
-        //Spatial sown_model = assetManager.loadModel("Models/SownFinal/SownFinal.j3o");
         Spatial sown_model = assetManager.loadModel("Models/SownFinalTest/SownFinalTest.j3o");
 
         sown_model.setLocalScale(0.4f);
@@ -98,8 +107,6 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(sown);
         // Obtener el AnimComposer del modelo
         animComposer = sown_model.getControl(AnimComposer.class);
-
-        // Agregar BetterCharacterControl al personaje con un BoxCollisionShape
         
         //-------------------------------------radio,altura,forma
         playerSown = new BetterCharacterControl(0.6f,1.3f,0.4f); //forma
@@ -117,6 +124,76 @@ public class Main extends SimpleApplication {
         
     }
     
+    private void spawnEnemies(int difficulty) {
+        int spawnRate = 0;
+
+        // Calcular el spawnRate según la dificultad
+        switch (difficulty) {
+            case 1: // Fácil
+                spawnRate = 2; // Por ejemplo, un spawnRate bajo para fácil
+                break;
+            case 2: // Normal
+                spawnRate = 4; // Por ejemplo, un spawnRate medio para normal
+                break;
+            case 3: // Difícil
+                spawnRate = 6; // Por ejemplo, un spawnRate alto para difícil
+                break;
+            default:
+                spawnRate = 2; // Por defecto, un spawnRate bajo
+                break;
+        }
+
+        int numEnemies = spawnRate * difficulty; // Cálculo de la cantidad de enemigos
+        Random random = new Random();
+
+        // Generar los enemigos en el punto deseado
+        for (int i = 0; i < numEnemies; i++) {
+            Geometry enemyCube = new Geometry("EnemyCube", new Box(1, 1, 1)); // Crear un cubo para representar al enemigo
+            Material enemyMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+            enemyMat.setColor("Color", ColorRGBA.Red); // Color rojo para el cubo del enemigo
+            enemyCube.setMaterial(enemyMat);
+
+            // Configurar posición del enemigo en el punto deseado
+            enemyCube.setLocalTranslation(-100f, 0.1f, -30f); // Usar las coordenadas adecuadas
+
+            // Asignar una velocidad aleatoria entre 2f y 6f
+            enemyCube.setUserData("speed", 2f + random.nextFloat() * 4f);
+
+            // Crear una forma de colisión para el cubo del enemigo
+            CollisionShape enemyShape = new BoxCollisionShape(new Vector3f(1, 1, 1));
+            // Crear un RigidBodyControl para el enemigo y añadirlo
+            RigidBodyControl enemyControl = new RigidBodyControl(enemyShape, 1f); // Masa de 1f
+            enemyCube.addControl(enemyControl);
+
+            // Añadir el control de física al espacio de física
+            fisica.getPhysicsSpace().add(enemyControl);
+
+            rootNode.attachChild(enemyCube); // Agregar el cubo del enemigo al nodo principal de la escena
+        }
+    }
+    
+    private void updateEnemies(float tpf) {
+        Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation(); // Obtener la posición del portal
+
+        // Recorrer todos los nodos hijos del rootNode para buscar los cubos de los enemigos
+        for (Spatial spatial : rootNode.getChildren()) {
+            if (spatial.getName().equals("EnemyCube")) { // Buscar cubos de enemigos
+                // Calcular la dirección hacia la que deben moverse los enemigos (hacia el portal)
+                Vector3f enemyPos = spatial.getWorldTranslation();
+                Vector3f directionToPortal = portalPos.subtract(enemyPos).normalizeLocal();
+
+                // Obtener la velocidad del enemigo
+                float speed = spatial.getUserData("speed");
+
+                // Mover el cubo del enemigo en la dirección calculada
+                RigidBodyControl enemyControl = spatial.getControl(RigidBodyControl.class);
+                if (enemyControl != null) {
+                    enemyControl.setLinearVelocity(directionToPortal.mult(speed)); // Multiplicar por la velocidad del enemigo
+                }
+            }
+        }
+    }
+
     private void setupMap() {
         Node map = new Node("map_node");
         Spatial map_model = assetManager.loadModel("Models/scene/scene.j3o");
@@ -153,7 +230,24 @@ public class Main extends SimpleApplication {
         // Agrega el RigidBodyControl al BulletAppState
         fisica.getPhysicsSpace().add(portalControl);
         
-       
+        // Agregar emisor de partículas al portal
+        ParticleEmitter particleEmitter = new ParticleEmitter("PortalParticles", ParticleMesh.Type.Triangle, 30);
+        Material particleMat = new Material(assetManager, "Common/MatDefs/Misc/Particle.j3md");
+        //particleMat.setTexture("Texture", assetManager.loadTexture("Effects/Explosion/flame.png"));
+        particleEmitter.setMaterial(particleMat);
+        particleEmitter.setImagesX(2);
+        particleEmitter.setImagesY(2);
+        particleEmitter.setEndColor(new ColorRGBA(0.8f, 0, 0.8f, 1)); // Color morado
+        particleEmitter.setStartColor(new ColorRGBA(0.8f, 0, 0.8f, 0.5f)); // Color morado con transparencia
+        particleEmitter.setStartSize(1.5f);
+        particleEmitter.setEndSize(0.1f);
+        particleEmitter.setGravity(0, 0, 0);
+        particleEmitter.setLowLife(0.5f);
+        particleEmitter.setHighLife(10f);
+        particleEmitter.getParticleInfluencer().setInitialVelocity(new Vector3f(0, 2, 0)); // Velocidad inicial
+        particleEmitter.getParticleInfluencer().setVelocityVariation(0.3f); // Variación de velocidad
+
+        portal.attachChild(particleEmitter);
         rootNode.attachChild(portal);
     }
     
@@ -184,24 +278,20 @@ public class Main extends SimpleApplication {
 
     private void setupKeys() {
         inputManager.addMapping("Dash", new KeyTrigger(KeyInput.KEY_LSHIFT));
-        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE)); 
-        inputManager.addListener(actionListener, "Dash", "Jump");
-
+        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
         inputManager.addMapping("Mover_Adelante", new KeyTrigger(KeyInput.KEY_W));
         inputManager.addMapping("Mover_Atras", new KeyTrigger(KeyInput.KEY_S));
         inputManager.addMapping("Mover_Izq", new KeyTrigger(KeyInput.KEY_A));
         inputManager.addMapping("Mover_Der", new KeyTrigger(KeyInput.KEY_D));
-
+        inputManager.addMapping("Attack", new MouseButtonTrigger(MouseInput.BUTTON_LEFT));
+        
+        
+        inputManager.addListener(actionListener, "Dash", "Jump");
         inputManager.addListener(actionListener, "Mover_Adelante", "Mover_Atras");
         inputManager.addListener(actionListener,"Mover_Izq", "Mover_Der");
     }
 
     private void setupLight() {
-        // Luz ambiental
-        AmbientLight ambientLight = new AmbientLight();
-        ambientLight.setColor(ColorRGBA.White.mult(0.7f)); // Reducir la intensidad para evitar sobreiluminación
-        rootNode.addLight(ambientLight);
-
         // Luz direccional principal
         DirectionalLight mainLight = new DirectionalLight();
         mainLight.setColor(ColorRGBA.LightGray.mult(0.8f)); // Aumentar la intensidad para una iluminación más brillante
@@ -212,8 +302,8 @@ public class Main extends SimpleApplication {
         DirectionalLightShadowRenderer dlsr = new DirectionalLightShadowRenderer(assetManager, 1024, 3);
         dlsr.setLight(mainLight);
         dlsr.setShadowIntensity(0.5f); // Ajustar la intensidad de las sombras
-        dlsr.setShadowZExtend(50f); // Aumentar la distancia de renderizado de sombras
-        dlsr.setShadowZFadeLength(50f); // Ajustar la distancia de atenuación de sombras
+        dlsr.setShadowZExtend(150f); // Aumentar la distancia de renderizado de sombras
+         // Ajustar la distancia de atenuación de sombras
         viewPort.addProcessor(dlsr);
 
         // Configurar sombras en los objetos
@@ -249,7 +339,6 @@ public class Main extends SimpleApplication {
         }
     };
     
-
     private void handleMovement(float tpf) {
         // Calcula la dirección de movimiento basada en la entrada del usuario
         Vector3f moveDirection = new Vector3f(0, 0, 0);
@@ -291,12 +380,8 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
-        
-        FilterPostProcessor fpp = new FilterPostProcessor(assetManager);
-        // Aplicar los filtros al ViewPort
-        viewPort.addProcessor(fpp);
+        updateEnemies(tpf);
         handleMovement(tpf);
-        
     }
     
     @Override

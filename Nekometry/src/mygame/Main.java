@@ -289,6 +289,7 @@ public class Main extends SimpleApplication {
         inputManager.addListener(actionListener, "Dash", "Jump");
         inputManager.addListener(actionListener, "Mover_Adelante", "Mover_Atras");
         inputManager.addListener(actionListener,"Mover_Izq", "Mover_Der");
+        inputManager.addListener(actionListener,"Attack");
     }
 
     private void setupLight() {
@@ -335,9 +336,37 @@ public class Main extends SimpleApplication {
                 atras = isPressed;
             }else if (name.equals("Jump") && isPressed) {
                 jump = true;
+            }else if (name.equals("Attack") && isPressed) {
+                handleProjectileAttack();
             }
         }
     };
+    
+    private void handleProjectileAttack() {
+        // Aquí creas y configuras el proyectil
+        // Por ejemplo, puedes crear una geometría simple como un cubo rojo para representar el proyectil
+        Geometry projectile = new Geometry("Projectile", new Box(0.2f, 0.2f, 0.2f)); // Tamaño del proyectil
+        Material projectileMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        projectileMat.setColor("Color", ColorRGBA.Red); // Color rojo para el proyectil
+        projectile.setMaterial(projectileMat);
+
+        // Configura la posición inicial del proyectil cerca del personaje
+        Vector3f playerPos = sown.getWorldTranslation();
+        Vector3f projectilePos = playerPos.add(cam.getDirection().mult(0f)); // Posición a 2 unidades frente al personaje
+        projectile.setLocalTranslation(projectilePos);
+
+        // Agrega un control de física al proyectil para que se comporte como un objeto físico
+        RigidBodyControl projectileControl = new RigidBodyControl(1f); // Masa del proyectil
+        projectile.addControl(projectileControl);
+
+        // Aplica una fuerza al proyectil para que se mueva en la dirección en la que está mirando el personaje
+        Vector3f projectileDir = cam.getDirection().clone().mult(20f); // Velocidad del proyectil
+        projectileControl.setLinearVelocity(projectileDir);
+
+        // Agrega el proyectil al nodo principal de la escena y al espacio de física
+        rootNode.attachChild(projectile);
+        fisica.getPhysicsSpace().add(projectileControl);
+    }
     
     private void handleMovement(float tpf) {
         // Calcula la dirección de movimiento basada en la entrada del usuario
@@ -364,6 +393,7 @@ public class Main extends SimpleApplication {
             }
             jump = false; // Resetea el estado de salto
         }
+        
 
         // Normaliza la dirección de movimiento para mantener la misma velocidad en todas las direcciones
         if (!moveDirection.equals(Vector3f.ZERO)) {

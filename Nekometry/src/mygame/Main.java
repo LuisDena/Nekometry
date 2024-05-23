@@ -6,6 +6,7 @@ import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 
 import com.jme3.bullet.collision.shapes.CollisionShape;
+import com.jme3.bullet.collision.shapes.MeshCollisionShape;
 import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
@@ -38,6 +39,7 @@ import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
 import com.jme3.util.SkyFactory;
 import java.util.Random;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 
 public class Main extends SimpleApplication {
@@ -59,6 +61,10 @@ public class Main extends SimpleApplication {
     float velocidad = 15f; // Velocidad de movimiento
 
     private BulletAppState fisica; // Declaración de la variable bulletAppState
+    
+    private long lastShootTime = 0;
+    private static final long SHOOT_COOLDOWN = 500; 
+
 
     public static void main(String[] args) {
         
@@ -80,7 +86,7 @@ public class Main extends SimpleApplication {
         /** Set up Physics */
         fisica = new BulletAppState();
         stateManager.attach(fisica);
-        //fisica.setDebugEnabled(true);
+        fisica.setDebugEnabled(true);
         
         //getRootNode().attachChild(SkyFactory.createSky(getAssetManager(),
         //        "Models/cielo.jpg", SkyFactory.EnvMapType.CubeMap));
@@ -109,8 +115,8 @@ public class Main extends SimpleApplication {
         animComposer = sown_model.getControl(AnimComposer.class);
         
         //-------------------------------------radio,altura,forma
-        playerSown = new BetterCharacterControl(0.6f,1.3f,0.4f); //forma
-        //playerSown.warp(new Vector3f(-20, 0, -19));
+        //playerSown = new BetterCharacterControl(0.6f,1.3f,0.4f); //forma
+        playerSown = new BetterCharacterControl(0.6f,1.3f,25f);
         
         sown.setLocalTranslation(-30f, 1.6f, -19f);
         
@@ -148,27 +154,24 @@ public class Main extends SimpleApplication {
 
         // Generar los enemigos en el punto deseado
         for (int i = 0; i < numEnemies; i++) {
-            Geometry enemyCube = new Geometry("EnemyCube", new Box(1, 1, 1)); // Crear un cubo para representar al enemigo
-            Material enemyMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-            enemyMat.setColor("Color", ColorRGBA.Red); // Color rojo para el cubo del enemigo
-            enemyCube.setMaterial(enemyMat);
-
+            Spatial enemy = assetManager.loadModel("Models/enemy/enemy.j3o");
+            enemy.setName("enemy");
             // Configurar posición del enemigo en el punto deseado
-            enemyCube.setLocalTranslation(-100f, 0.1f, -30f); // Usar las coordenadas adecuadas
+            enemy.setLocalTranslation(-100f, 1.1f, -30f); // Usar las coordenadas adecuadas
 
             // Asignar una velocidad aleatoria entre 2f y 6f
-            enemyCube.setUserData("speed", 2f + random.nextFloat() * 4f);
+            enemy.setUserData("speed", 2f + random.nextFloat() * 4f);
 
             // Crear una forma de colisión para el cubo del enemigo
-            CollisionShape enemyShape = new BoxCollisionShape(new Vector3f(1, 1, 1));
+            CollisionShape enemyShape = CollisionShapeFactory.createBoxShape(enemy);
             // Crear un RigidBodyControl para el enemigo y añadirlo
             RigidBodyControl enemyControl = new RigidBodyControl(enemyShape, 1f); // Masa de 1f
-            enemyCube.addControl(enemyControl);
+            enemy.addControl(enemyControl);
 
             // Añadir el control de física al espacio de física
             fisica.getPhysicsSpace().add(enemyControl);
 
-            rootNode.attachChild(enemyCube); // Agregar el cubo del enemigo al nodo principal de la escena
+            rootNode.attachChild(enemy); // Agregar el cubo del enemigo al nodo principal de la escena
         }
     }
     
@@ -177,7 +180,7 @@ public class Main extends SimpleApplication {
 
         // Recorrer todos los nodos hijos del rootNode para buscar los cubos de los enemigos
         for (Spatial spatial : rootNode.getChildren()) {
-            if (spatial.getName().equals("EnemyCube")) { // Buscar cubos de enemigos
+            if (spatial.getName().equals("enemy")) { // Buscar cubos de enemigos
                 // Calcular la dirección hacia la que deben moverse los enemigos (hacia el portal)
                 Vector3f enemyPos = spatial.getWorldTranslation();
                 Vector3f directionToPortal = portalPos.subtract(enemyPos).normalizeLocal();
@@ -342,30 +345,54 @@ public class Main extends SimpleApplication {
         }
     };
     
-    private void handleProjectileAttack() {
-        // Aquí creas y configuras el proyectil
-        // Por ejemplo, puedes crear una geometría simple como un cubo rojo para representar el proyectil
-        Geometry projectile = new Geometry("Projectile", new Box(0.2f, 0.2f, 0.2f)); // Tamaño del proyectil
-        Material projectileMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        projectileMat.setColor("Color", ColorRGBA.Red); // Color rojo para el proyectil
-        projectile.setMaterial(projectileMat);
+    public void handleProjectileAttack() {
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastShootTime < SHOOT_COOLDOWN) {
+            return; // Salir si el cooldown no ha terminado
+        }
+        lastShootTime = currentTime;
+        enqueue(() -> {
+            
+            // Crea y configura el proyectil
+            Geometry projectile = new Geometry("Projectile", new Box(0.2f, 0.1f, 0.1f));
+            Material projectileMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+            projectileMat.setColor("Color", ColorRGBA.Red);
+            projectile.setMaterial(projectileMat);
 
-        // Configura la posición inicial del proyectil cerca del personaje
-        Vector3f playerPos = sown.getWorldTranslation();
-        Vector3f projectilePos = playerPos.add(cam.getDirection().mult(0f)); // Posición a 2 unidades frente al personaje
-        projectile.setLocalTranslation(projectilePos);
+            Vector3f playerPos = sown.getWorldTranslation();
+            Vector3f projectilePos = playerPos.add(cam.getDirection().mult(2f)).addLocal(0, 1f, 0f);
+            projectile.setLocalTranslation(projectilePos);
 
-        // Agrega un control de física al proyectil para que se comporte como un objeto físico
-        RigidBodyControl projectileControl = new RigidBodyControl(1f); // Masa del proyectil
-        projectile.addControl(projectileControl);
+            RigidBodyControl projectileControl = new RigidBodyControl(1f);
+            projectile.addControl(projectileControl);
 
-        // Aplica una fuerza al proyectil para que se mueva en la dirección en la que está mirando el personaje
-        Vector3f projectileDir = cam.getDirection().clone().mult(20f); // Velocidad del proyectil
-        projectileControl.setLinearVelocity(projectileDir);
+            Vector3f projectileDir = playerSown.getViewDirection().normalize().mult(100f);
+            projectileControl.setLinearVelocity(projectileDir);
 
-        // Agrega el proyectil al nodo principal de la escena y al espacio de física
-        rootNode.attachChild(projectile);
-        fisica.getPhysicsSpace().add(projectileControl);
+            rootNode.attachChild(projectile);
+            fisica.getPhysicsSpace().add(projectileControl);
+
+            // Crea un executor para gestionar la eliminación del proyectil después de 2 segundos
+            ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+            executor.schedule(() -> {
+                enqueue(() -> {
+                    // Remueve el proyectil del nodo de la escena y del espacio de física
+                    rootNode.detachChild(projectile);
+                    fisica.getPhysicsSpace().remove(projectileControl);
+
+                    // Limpia el proyectil y su control
+                    projectile.removeControl(projectileControl);
+                    projectileControl.setEnabled(false);
+                    projectile.removeFromParent();
+
+                    // Cierra el executor
+                    executor.shutdown();
+                    return null;
+                });
+            }, 2000, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+            return null; // Necesario para Callable
+        });
     }
     
     private void handleMovement(float tpf) {
@@ -417,5 +444,6 @@ public class Main extends SimpleApplication {
     @Override
     public void simpleRender(RenderManager rm) {
         // TODO: add render code
+        
     }
 }

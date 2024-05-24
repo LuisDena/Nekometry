@@ -2,6 +2,7 @@ package mygame;
 
 import com.jme3.anim.AnimComposer;
 import com.jme3.app.SimpleApplication;
+import com.jme3.bounding.BoundingSphere;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 
@@ -10,6 +11,8 @@ import com.jme3.bullet.collision.shapes.MeshCollisionShape;
 import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
+import com.jme3.collision.CollisionResult;
+import com.jme3.collision.CollisionResults;
 import com.jme3.effect.ParticleEmitter;
 import com.jme3.effect.ParticleMesh;
 import com.jme3.input.KeyInput;
@@ -44,11 +47,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public class Main extends SimpleApplication {
     
-    //spawncoords1= 90f, 0.1f, -30f
-    //spawncoords2= -51f, 0.1f, 90f
-    //spawncoords3= -50f, 0.1f, -90f
-    //spawncoords4= -100f, 0.1f, -30f
-    
     private Node sown;
     private CameraNode camNode;
     
@@ -65,6 +63,9 @@ public class Main extends SimpleApplication {
     private long lastShootTime = 0;
     private static final long SHOOT_COOLDOWN = 500; 
 
+    private int hitCount = 0;
+    private static final int MAX_HITS = 2; // Define el máximo de golpes para eliminar al enemigo
+    
 
     public static void main(String[] args) {
         
@@ -79,26 +80,24 @@ public class Main extends SimpleApplication {
         app.start();
     }
     
-
     @Override
     public void simpleInitApp() {
         
         /** Set up Physics */
         fisica = new BulletAppState();
         stateManager.attach(fisica);
-        fisica.setDebugEnabled(true);
+        //fisica.setDebugEnabled(true);
         
         //getRootNode().attachChild(SkyFactory.createSky(getAssetManager(),
         //        "Models/cielo.jpg", SkyFactory.EnvMapType.CubeMap));
-        spawnEnemies(1);
+        spawnEnemies(2);
         setupKeys();
         setupPlayer();
         setupLight();
         setupMap();
         setupBoundaries();
         setupCamera();
-        
-        
+        setupCollisionListener();
     }
     
     private void setupPlayer() {
@@ -115,7 +114,6 @@ public class Main extends SimpleApplication {
         animComposer = sown_model.getControl(AnimComposer.class);
         
         //-------------------------------------radio,altura,forma
-        //playerSown = new BetterCharacterControl(0.6f,1.3f,0.4f); //forma
         playerSown = new BetterCharacterControl(0.6f,1.3f,25f);
         
         sown.setLocalTranslation(-30f, 1.6f, -19f);
@@ -152,28 +150,41 @@ public class Main extends SimpleApplication {
         int numEnemies = spawnRate * difficulty; // Cálculo de la cantidad de enemigos
         Random random = new Random();
 
+        // Lista de coordenadas de generación
+        Vector3f[] spawnPoints = {
+            new Vector3f(90f, 0.1f, -30f),
+            new Vector3f(-51f, 0.1f, 90f),
+            new Vector3f(-50f, 0.1f, -90f),
+            new Vector3f(-100f, 0.1f, -30f)
+        };
+
         // Generar los enemigos en el punto deseado
         for (int i = 0; i < numEnemies; i++) {
             Spatial enemy = assetManager.loadModel("Models/enemy/enemy.j3o");
             enemy.setName("enemy");
-            // Configurar posición del enemigo en el punto deseado
-            enemy.setLocalTranslation(-100f, 1.1f, -30f); // Usar las coordenadas adecuadas
+            
+            // Inicializar el contador de golpes
+            enemy.setUserData("hitCount", 0);
+
+            // Seleccionar un punto de generación aleatorio de la lista
+            Vector3f spawnPoint = spawnPoints[random.nextInt(spawnPoints.length)];
+            enemy.setLocalTranslation(spawnPoint);
 
             // Asignar una velocidad aleatoria entre 2f y 6f
-            enemy.setUserData("speed", 2f + random.nextFloat() * 4f);
+            enemy.setUserData("speed", 3f + random.nextFloat() * 5f);
 
-            // Crear una forma de colisión para el cubo del enemigo
+            // Crear una forma de colisión para el enemigo
             CollisionShape enemyShape = CollisionShapeFactory.createBoxShape(enemy);
-            // Crear un RigidBodyControl para el enemigo y añadirlo
             RigidBodyControl enemyControl = new RigidBodyControl(enemyShape, 1f); // Masa de 1f
             enemy.addControl(enemyControl);
 
             // Añadir el control de física al espacio de física
             fisica.getPhysicsSpace().add(enemyControl);
 
-            rootNode.attachChild(enemy); // Agregar el cubo del enemigo al nodo principal de la escena
+            rootNode.attachChild(enemy); // Agregar el enemigo al nodo principal de la escena
         }
     }
+
     
     private void updateEnemies(float tpf) {
         Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation(); // Obtener la posición del portal
@@ -345,25 +356,66 @@ public class Main extends SimpleApplication {
         }
     };
     
+    private void setupCollisionListener() {
+        fisica.getPhysicsSpace().addCollisionListener(event -> {
+            Spatial nodeA = event.getNodeA();
+            Spatial nodeB = event.getNodeB();
+
+            if (nodeA != null && nodeB != null) { // Verificar que nodeA y nodeB no sean nulos
+                // Comprobar si el proyectil colisionó con un enemigo
+                if (nodeA.getName() != null && nodeB.getName() != null && nodeA.getName().equals("Projectile") && nodeB.getName().equals("enemy")) {
+                    handleEnemyHit(nodeB, nodeA);
+                } else if (nodeB.getName() != null && nodeA.getName() != null && nodeB.getName().equals("Projectile") && nodeA.getName().equals("enemy")) {
+                    handleEnemyHit(nodeA, nodeB);
+                }
+            }
+        });
+    }
+    
+    private void handleEnemyHit(Spatial enemy, Spatial projectile) {
+        // Obtener el contador de golpes actual del enemigo
+        int hitCount = enemy.getUserData("hitCount");
+
+        // Incrementar el contador de golpes
+        hitCount++;
+
+        // Almacenar el nuevo contador de golpes en el enemigo
+        enemy.setUserData("hitCount", hitCount);
+
+        // Eliminar el proyectil
+        rootNode.detachChild(projectile);
+        fisica.getPhysicsSpace().remove(projectile.getControl(RigidBodyControl.class));
+
+        // Verificar si el enemigo ha sido golpeado dos veces
+        if (hitCount >= MAX_HITS) {
+            // Eliminar el enemigo
+            rootNode.detachChild(enemy);
+            fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
+            // Reiniciar el contador de golpes solo para este enemigo
+            enemy.setUserData("hitCount", 0);
+        }
+    }
+    
     public void handleProjectileAttack() {
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastShootTime < SHOOT_COOLDOWN) {
             return; // Salir si el cooldown no ha terminado
         }
         lastShootTime = currentTime;
+        
         enqueue(() -> {
             
             // Crea y configura el proyectil
             Geometry projectile = new Geometry("Projectile", new Box(0.2f, 0.1f, 0.1f));
             Material projectileMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-            projectileMat.setColor("Color", ColorRGBA.Red);
+            projectileMat.setColor("Color", ColorRGBA.Magenta);
             projectile.setMaterial(projectileMat);
 
             Vector3f playerPos = sown.getWorldTranslation();
             Vector3f projectilePos = playerPos.add(cam.getDirection().mult(2f)).addLocal(0, 1f, 0f);
             projectile.setLocalTranslation(projectilePos);
 
-            RigidBodyControl projectileControl = new RigidBodyControl(1f);
+            RigidBodyControl projectileControl = new RigidBodyControl(10f);
             projectile.addControl(projectileControl);
 
             Vector3f projectileDir = playerSown.getViewDirection().normalize().mult(100f);
@@ -371,7 +423,6 @@ public class Main extends SimpleApplication {
 
             rootNode.attachChild(projectile);
             fisica.getPhysicsSpace().add(projectileControl);
-
             // Crea un executor para gestionar la eliminación del proyectil después de 2 segundos
             ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
             executor.schedule(() -> {

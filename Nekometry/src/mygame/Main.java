@@ -50,6 +50,8 @@ public class Main extends SimpleApplication {
     private Node sown;
     private CameraNode camNode;
     
+    Node portal;
+    
     private AnimComposer animComposer;
     
     private BetterCharacterControl playerSown;
@@ -65,6 +67,9 @@ public class Main extends SimpleApplication {
 
     private int hitCount = 0;
     private static final int MAX_HITS = 2; // Define el máximo de golpes para eliminar al enemigo
+    
+    private int portalCollisionCount = 0;
+    private static final int MAX_PORTAL_COLLISIONS = 3;
     
 
     public static void main(String[] args) {
@@ -184,7 +189,6 @@ public class Main extends SimpleApplication {
             rootNode.attachChild(enemy); // Agregar el enemigo al nodo principal de la escena
         }
     }
-
     
     private void updateEnemies(float tpf) {
         Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation(); // Obtener la posición del portal
@@ -203,6 +207,10 @@ public class Main extends SimpleApplication {
                 RigidBodyControl enemyControl = spatial.getControl(RigidBodyControl.class);
                 if (enemyControl != null) {
                     enemyControl.setLinearVelocity(directionToPortal.mult(speed)); // Multiplicar por la velocidad del enemigo
+                    // Comprobar si el enemigo ha llegado al portal (colisión simple)
+                    if (enemyPos.distance(portalPos) < 5.5f) {
+                        handleEnemyReachedPortal(spatial);
+                    }
                 }
             }
         }
@@ -228,7 +236,7 @@ public class Main extends SimpleApplication {
     }
     
     private void setupPortalMap(){        
-        Node portal = new Node("portal_node");
+        portal = new Node("portal_node");
         Spatial portal_model = assetManager.loadModel("Models/portal/portal.j3o");
         portal.setLocalTranslation(-30f, -0.7f, -19f);
         portal_model.setLocalScale(2f);
@@ -367,14 +375,38 @@ public class Main extends SimpleApplication {
                     handleEnemyHit(nodeB, nodeA);
                 } else if (nodeB.getName() != null && nodeA.getName() != null && nodeB.getName().equals("Projectile") && nodeA.getName().equals("enemy")) {
                     handleEnemyHit(nodeA, nodeB);
+                }// Comprobar si el enemigo colisionó con el portal
+                else if (nodeA.getName().equals("enemy") && nodeB.getName().equals("portal_node")) {
+                    handleEnemyReachedPortal(nodeA);
+                } else if (nodeB.getName().equals("enemy") && nodeA.getName().equals("portal_node")) {
+                    handleEnemyReachedPortal(nodeB);
                 }
             }
         });
     }
     
+    private void handleEnemyReachedPortal(Spatial enemy) {
+        // Incrementar el contador de colisiones con el portal
+        portalCollisionCount++;
+
+        // Eliminar el enemigo
+        rootNode.detachChild(enemy);
+        fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
+
+        // Verificar si el contador de colisiones con el portal ha alcanzado el límite
+        if (portalCollisionCount >= MAX_PORTAL_COLLISIONS) {
+            onPlayerLose();
+        }
+    }
+    
+    private void onPlayerLose() {
+        System.out.println("¡Has perdido! Los enemigos han alcanzado el portal 3 veces.");
+        stop();
+    }
+    
     private void handleEnemyHit(Spatial enemy, Spatial projectile) {
         // Obtener el contador de golpes actual del enemigo
-        int hitCount = enemy.getUserData("hitCount");
+        hitCount = enemy.getUserData("hitCount");
 
         // Incrementar el contador de golpes
         hitCount++;

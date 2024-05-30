@@ -2,33 +2,25 @@ package mygame;
 
 import com.jme3.anim.AnimComposer;
 import com.jme3.app.SimpleApplication;
-import com.jme3.bounding.BoundingSphere;
+import com.jme3.audio.AudioData.DataType;
+import com.jme3.audio.AudioNode;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
-
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.MeshCollisionShape;
 import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
-import com.jme3.collision.CollisionResult;
-import com.jme3.collision.CollisionResults;
 import com.jme3.effect.ParticleEmitter;
 import com.jme3.effect.ParticleMesh;
 import com.jme3.input.KeyInput;
 import com.jme3.input.MouseInput;
 import com.jme3.input.controls.ActionListener;
-
 import com.jme3.light.DirectionalLight;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.input.controls.MouseButtonTrigger;
-import com.jme3.light.AmbientLight;
 import com.jme3.material.Material;
-
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
-import com.jme3.post.FilterPostProcessor;
-
 import com.jme3.renderer.RenderManager;
 import com.jme3.renderer.queue.RenderQueue.ShadowMode;
 import com.jme3.scene.CameraNode;
@@ -38,9 +30,7 @@ import com.jme3.scene.Spatial;
 import com.jme3.scene.control.CameraControl.ControlDirection;
 import com.jme3.scene.shape.Box;
 import com.jme3.shadow.DirectionalLightShadowRenderer;
-import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
-import com.jme3.util.SkyFactory;
 import java.util.Random;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -50,7 +40,7 @@ public class Main extends SimpleApplication {
     private Node sown;
     private CameraNode camNode;
     
-    Node portal;
+    private Node portal;
     
     private AnimComposer animComposer;
     
@@ -58,7 +48,7 @@ public class Main extends SimpleApplication {
     
     private boolean adelante=false,atras=false,izq=false,der=false, jump=false;
     
-    float velocidad = 15f; // Velocidad de movimiento
+    private float velocidad = 15f; // Velocidad de movimiento
 
     private BulletAppState fisica; // Declaración de la variable bulletAppState
     
@@ -70,6 +60,8 @@ public class Main extends SimpleApplication {
     
     private int portalCollisionCount = 0;
     private static final int MAX_PORTAL_COLLISIONS = 3;
+    
+    private AudioNode backgroundMusic;
     
 
     public static void main(String[] args) {
@@ -95,6 +87,7 @@ public class Main extends SimpleApplication {
         
         //getRootNode().attachChild(SkyFactory.createSky(getAssetManager(),
         //        "Models/cielo.jpg", SkyFactory.EnvMapType.CubeMap));
+        
         spawnEnemies(2);
         setupKeys();
         setupPlayer();
@@ -103,22 +96,31 @@ public class Main extends SimpleApplication {
         setupBoundaries();
         setupCamera();
         setupCollisionListener();
+        handleBackgroundMusic();
     }
     
     private void setupPlayer() {
-        Spatial sown_model = assetManager.loadModel("Models/SownFinalTest/SownFinalTest.j3o");
+        Spatial sown_model = assetManager.loadModel("Models/Sown/SownFinal.j3o");
 
         sown_model.setLocalScale(0.4f);
 
         sown = new Node("sown_node");
         
         sown.attachChild(sown_model);
+        
+        animComposer = findAnimComposer(sown);
+        if (animComposer != null) {
+            System.out.println("Animaciones disponibles:");
+            for (String animacion : animComposer.getAnimClipsNames()) {
+                System.out.println("- " + animacion);
+            }
+        } else {
+            System.out.println("El modelo no tiene un AnimComposer.");
+        }
 
         rootNode.attachChild(sown);
-        // Obtener el AnimComposer del modelo
-        animComposer = sown_model.getControl(AnimComposer.class);
         
-        //-------------------------------------radio,altura,forma
+        //-------------------------------------radio,altura,masa
         playerSown = new BetterCharacterControl(0.6f,1.3f,25f);
         
         sown.setLocalTranslation(-30f, 1.6f, -19f);
@@ -195,7 +197,7 @@ public class Main extends SimpleApplication {
 
         // Recorrer todos los nodos hijos del rootNode para buscar los cubos de los enemigos
         for (Spatial spatial : rootNode.getChildren()) {
-            if (spatial.getName().equals("enemy")) { // Buscar cubos de enemigos
+            if ( spatial.getName() != null && spatial.getName().equals("enemy")) { // Buscar cubos de enemigos
                 // Calcular la dirección hacia la que deben moverse los enemigos (hacia el portal)
                 Vector3f enemyPos = spatial.getWorldTranslation();
                 Vector3f directionToPortal = portalPos.subtract(enemyPos).normalizeLocal();
@@ -208,7 +210,7 @@ public class Main extends SimpleApplication {
                 if (enemyControl != null) {
                     enemyControl.setLinearVelocity(directionToPortal.mult(speed)); // Multiplicar por la velocidad del enemigo
                     // Comprobar si el enemigo ha llegado al portal (colisión simple)
-                    if (enemyPos.distance(portalPos) < 5.5f) {
+                    if (enemyPos.distance(portalPos) < 5.9f) {
                         handleEnemyReachedPortal(spatial);
                     }
                 }
@@ -509,6 +511,7 @@ public class Main extends SimpleApplication {
         if (!moveDirection.equals(Vector3f.ZERO)) {
             moveDirection.normalizeLocal();
             moveDirection.multLocal(velocidad); // Multiplica por la velocidad de movimiento
+            
         }
         // Obtiene la dirección de la cámara y rota al personaje hacia esa dirección
         Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
@@ -517,11 +520,39 @@ public class Main extends SimpleApplication {
         // Establece la dirección de movimiento al personaje
         playerSown.setWalkDirection(moveDirection);
     }
-
+    
+    private void handleBackgroundMusic(){
+        // Cargar y reproducir música de fondo
+        backgroundMusic = new AudioNode(assetManager, "Music/MusicaFondo.ogg", DataType.Stream);
+        backgroundMusic.setLooping(true);  // Reproducir en bucle
+        backgroundMusic.setPositional(false);  // No espacial
+        backgroundMusic.setVolume(0.2f);  // Volumen de la música
+        rootNode.attachChild(backgroundMusic);
+        backgroundMusic.play();  // Reproducir la música
+    }
+    
     @Override
     public void simpleUpdate(float tpf) {
         updateEnemies(tpf);
         handleMovement(tpf);
+    }
+    
+    private AnimComposer findAnimComposer(Node node) {
+        if (node.getControl(AnimComposer.class) != null) {
+            System.out.println("AnimComposer encontrado en el nodo: " + node.getName());
+            return node.getControl(AnimComposer.class);
+        }
+
+        for (Spatial child : node.getChildren()) {
+            if (child instanceof Node) {
+                AnimComposer childAnimComposer = findAnimComposer((Node) child);
+                if (childAnimComposer != null) {
+                    return childAnimComposer;
+                }
+            }
+        }
+
+        return null;
     }
     
     @Override

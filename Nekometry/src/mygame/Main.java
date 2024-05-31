@@ -36,17 +36,18 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 
 public class Main extends SimpleApplication {
-    
+    // Personaje 
     private Node sown;
     private CameraNode camNode;
-    
-    private Node portal;
-    
-    private AnimComposer animComposer;
-    
     private BetterCharacterControl playerSown;
     
+    // Controles
     private boolean adelante=false,atras=false,izq=false,der=false, jump=false;
+    
+    // Portal
+    private Node portal;
+    // Animaciones
+    private AnimComposer animComposer;
     
     private float velocidad = 15f; // Velocidad de movimiento
 
@@ -63,6 +64,9 @@ public class Main extends SimpleApplication {
     
     private AudioNode backgroundMusic;
     
+    private boolean isDashing = false; // Nueva variable para controlar el estado de dash
+    private static final float DASH_SPEED_MULTIPLIER = 4f; // Multiplicador de velocidad durante el dash
+
 
     public static void main(String[] args) {
         
@@ -97,6 +101,7 @@ public class Main extends SimpleApplication {
         setupCamera();
         setupCollisionListener();
         handleBackgroundMusic();
+        
     }
     
     private void setupPlayer() {
@@ -362,6 +367,8 @@ public class Main extends SimpleApplication {
                 jump = true;
             }else if (name.equals("Attack") && isPressed) {
                 handleProjectileAttack();
+            }if (name.equals("Dash")) {
+                isDashing = isPressed; // Activar o desactivar el dash según el estado de la tecla
             }
         }
     };
@@ -510,8 +517,9 @@ public class Main extends SimpleApplication {
         // Normaliza la dirección de movimiento para mantener la misma velocidad en todas las direcciones
         if (!moveDirection.equals(Vector3f.ZERO)) {
             moveDirection.normalizeLocal();
-            moveDirection.multLocal(velocidad); // Multiplica por la velocidad de movimiento
-            
+            // Aplicar el multiplicador de velocidad si se está realizando un dash
+            float speedMultiplier = isDashing ? DASH_SPEED_MULTIPLIER : 1f;
+            moveDirection.multLocal(velocidad * speedMultiplier); // Multiplica por la velocidad de movimiento y el multiplicador de dash
         }
         // Obtiene la dirección de la cámara y rota al personaje hacia esa dirección
         Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();

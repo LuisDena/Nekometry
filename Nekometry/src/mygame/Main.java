@@ -30,7 +30,10 @@ import com.jme3.scene.Spatial;
 import com.jme3.scene.control.CameraControl.ControlDirection;
 import com.jme3.scene.shape.Box;
 import com.jme3.shadow.DirectionalLightShadowRenderer;
+import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
+import com.jme3.util.SkyFactory;
+import com.jme3.texture.Texture;
 import java.util.Random;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -58,15 +61,25 @@ public class Main extends SimpleApplication {
 
     private int hitCount = 0;
     private static final int MAX_HITS = 2; // Define el máximo de golpes para eliminar al enemigo
+    private float timeElapsed = 0;
+    private int numEnemiesToSpawn = 1;
+    private static final float SPAWN_INTERVAL = 5f; // Intervalo de 10 segundos para generar un nuevo enemigo
+    private float currentSpawnInterval = SPAWN_INTERVAL;
     
     private int portalCollisionCount = 0;
     private static final int MAX_PORTAL_COLLISIONS = 3;
     
     private AudioNode backgroundMusic;
+    private AudioNode walkSound;
+    private AudioNode dashSound;
+    private AudioNode shootSound;
+    
+    private AudioNode hitSound;
+    private AudioNode enemyDeathSound;
     
     private boolean isDashing = false; // Nueva variable para controlar el estado de dash
     private static final float DASH_SPEED_MULTIPLIER = 4f; // Multiplicador de velocidad durante el dash
-
+    
 
     public static void main(String[] args) {
         
@@ -89,10 +102,9 @@ public class Main extends SimpleApplication {
         stateManager.attach(fisica);
         //fisica.setDebugEnabled(true);
         
-        //getRootNode().attachChild(SkyFactory.createSky(getAssetManager(),
-        //        "Models/cielo.jpg", SkyFactory.EnvMapType.CubeMap));
         
-        spawnEnemies(2);
+        //setupSky();
+        spawnEnemies(numEnemiesToSpawn);
         setupKeys();
         setupPlayer();
         setupLight();
@@ -101,9 +113,23 @@ public class Main extends SimpleApplication {
         setupCamera();
         setupCollisionListener();
         handleBackgroundMusic();
+        handleSounds();
         
     }
     
+    /*private void setupSky(){
+        // Cargar las texturas del cubemap
+        Texture west = assetManager.loadTexture("Textures/Skybox/west.jpg");
+        Texture east = assetManager.loadTexture("Textures/Skybox/east.jpg");
+        Texture north = assetManager.loadTexture("Textures/Skybox/north.jpg");
+        Texture south = assetManager.loadTexture("Textures/Skybox/south.jpg");
+        Texture down = assetManager.loadTexture("Textures/Skybox/down.jpg");
+
+        // Crear el skybox
+        Spatial sky = SkyFactory.createSky(assetManager, west, east, north, south, up, down);
+        rootNode.attachChild(sky);
+    }
+    */
     private void setupPlayer() {
         Spatial sown_model = assetManager.loadModel("Models/Sown/SownFinal.j3o");
 
@@ -140,29 +166,9 @@ public class Main extends SimpleApplication {
         
     }
     
-    private void spawnEnemies(int difficulty) {
-        int spawnRate = 0;
-
-        // Calcular el spawnRate según la dificultad
-        switch (difficulty) {
-            case 1: // Fácil
-                spawnRate = 2; // Por ejemplo, un spawnRate bajo para fácil
-                break;
-            case 2: // Normal
-                spawnRate = 4; // Por ejemplo, un spawnRate medio para normal
-                break;
-            case 3: // Difícil
-                spawnRate = 6; // Por ejemplo, un spawnRate alto para difícil
-                break;
-            default:
-                spawnRate = 2; // Por defecto, un spawnRate bajo
-                break;
-        }
-
-        int numEnemies = spawnRate * difficulty; // Cálculo de la cantidad de enemigos
+    private void spawnEnemies(int numEnemies) {
         Random random = new Random();
 
-        // Lista de coordenadas de generación
         Vector3f[] spawnPoints = {
             new Vector3f(90f, 0.1f, -30f),
             new Vector3f(-51f, 0.1f, 90f),
@@ -314,7 +320,6 @@ public class Main extends SimpleApplication {
         inputManager.addMapping("Mover_Der", new KeyTrigger(KeyInput.KEY_D));
         inputManager.addMapping("Attack", new MouseButtonTrigger(MouseInput.BUTTON_LEFT));
         
-        
         inputManager.addListener(actionListener, "Dash", "Jump");
         inputManager.addListener(actionListener, "Mover_Adelante", "Mover_Atras");
         inputManager.addListener(actionListener,"Mover_Izq", "Mover_Der");
@@ -324,7 +329,7 @@ public class Main extends SimpleApplication {
     private void setupLight() {
         // Luz direccional principal
         DirectionalLight mainLight = new DirectionalLight();
-        mainLight.setColor(ColorRGBA.LightGray.mult(0.8f)); // Aumentar la intensidad para una iluminación más brillante
+        mainLight.setColor(ColorRGBA.White.mult(0.5f)); // Aumentar la intensidad para una iluminación más brillante
         mainLight.setDirection(new Vector3f(-0.5f, -0.5f, -0.5f).normalizeLocal());
         rootNode.addLight(mainLight);
 
@@ -333,13 +338,15 @@ public class Main extends SimpleApplication {
         dlsr.setLight(mainLight);
         dlsr.setShadowIntensity(0.5f); // Ajustar la intensidad de las sombras
         dlsr.setShadowZExtend(150f); // Aumentar la distancia de renderizado de sombras
-         // Ajustar la distancia de atenuación de sombras
+        dlsr.setEdgeFilteringMode(EdgeFilteringMode.Nearest);
+        
+        // Ajustar la distancia de atenuación de sombras
         viewPort.addProcessor(dlsr);
 
         // Configurar sombras en los objetos
         rootNode.setShadowMode(ShadowMode.CastAndReceive);
         sown.setShadowMode(ShadowMode.CastAndReceive);
-        // Otros objetos que deseen lanzar y recibir sombras también deben configurarse con el modo adecuado
+        
     }
 
     private void setupCamera() {
@@ -424,12 +431,14 @@ public class Main extends SimpleApplication {
         enemy.setUserData("hitCount", hitCount);
 
         // Eliminar el proyectil
+        hitSound.play();
         rootNode.detachChild(projectile);
         fisica.getPhysicsSpace().remove(projectile.getControl(RigidBodyControl.class));
 
         // Verificar si el enemigo ha sido golpeado dos veces
         if (hitCount >= MAX_HITS) {
             // Eliminar el enemigo
+            enemyDeathSound.play();
             rootNode.detachChild(enemy);
             fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
             // Reiniciar el contador de golpes solo para este enemigo
@@ -461,7 +470,7 @@ public class Main extends SimpleApplication {
 
             Vector3f projectileDir = playerSown.getViewDirection().normalize().mult(100f);
             projectileControl.setLinearVelocity(projectileDir);
-
+            shootSound.play();
             rootNode.attachChild(projectile);
             fisica.getPhysicsSpace().add(projectileControl);
             // Crea un executor para gestionar la eliminación del proyectil después de 2 segundos
@@ -493,18 +502,22 @@ public class Main extends SimpleApplication {
         if (adelante) {
             Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camDir);
+            walkSound.play();
         }
         if (atras) {
             Vector3f camOppositeDir = cam.getDirection().negate().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camOppositeDir);
+            walkSound.play();
         }
         if (izq) {
             Vector3f camLeft = cam.getLeft().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camLeft);
+             walkSound.play();
         }
         if (der) {
             Vector3f camRight = cam.getLeft().negate().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camRight);
+            walkSound.play();
         }
         if (jump) {// Manejar el salto
             if (playerSown.isOnGround()) { // Salta solo si está en el suelo
@@ -518,7 +531,14 @@ public class Main extends SimpleApplication {
         if (!moveDirection.equals(Vector3f.ZERO)) {
             moveDirection.normalizeLocal();
             // Aplicar el multiplicador de velocidad si se está realizando un dash
-            float speedMultiplier = isDashing ? DASH_SPEED_MULTIPLIER : 1f;
+            float speedMultiplier;
+            if (isDashing) {
+                speedMultiplier = DASH_SPEED_MULTIPLIER;
+                walkSound.stop();
+                dashSound.play();
+            } else {
+                speedMultiplier = 1f;
+            }
             moveDirection.multLocal(velocidad * speedMultiplier); // Multiplica por la velocidad de movimiento y el multiplicador de dash
         }
         // Obtiene la dirección de la cámara y rota al personaje hacia esa dirección
@@ -534,15 +554,70 @@ public class Main extends SimpleApplication {
         backgroundMusic = new AudioNode(assetManager, "Music/MusicaFondo.ogg", DataType.Stream);
         backgroundMusic.setLooping(true);  // Reproducir en bucle
         backgroundMusic.setPositional(false);  // No espacial
-        backgroundMusic.setVolume(0.2f);  // Volumen de la música
+        backgroundMusic.setVolume(0.05f);  // Volumen de la música
         rootNode.attachChild(backgroundMusic);
         backgroundMusic.play();  // Reproducir la música
+    }
+    
+    private void handleSounds(){
+        // Cargar los archivos de sonido
+        walkSound = new AudioNode(assetManager, "Sounds/walk.ogg", DataType.Stream);
+        walkSound.setLooping(false);
+        walkSound.setPositional(false);
+        walkSound.setVolume(0.8f);
+        walkSound.setPitch(0.9f);
+        
+        rootNode.attachChild(walkSound);
+        
+        dashSound = new AudioNode(assetManager, "Sounds/dash.ogg", DataType.Stream);
+        dashSound.setLooping(false);
+        dashSound.setPositional(false);
+        dashSound.setVolume(1);
+        dashSound.setPitch(1.9f);
+        rootNode.attachChild(dashSound);
+        
+        shootSound = new AudioNode(assetManager, "Sounds/shoot.ogg", DataType.Stream);
+        shootSound.setLooping(false);
+        shootSound.setPositional(false);
+        shootSound.setVolume(1);
+        shootSound.setPitch(2f);
+        rootNode.attachChild(shootSound);
+        
+        hitSound = new AudioNode(assetManager, "Sounds/hit.ogg", DataType.Stream);
+        hitSound.setLooping(false);
+        hitSound.setPositional(false);
+        hitSound.setVolume(1);
+        hitSound.setPitch(1.3f);
+        rootNode.attachChild(hitSound);
+        
+        
+        enemyDeathSound = new AudioNode(assetManager, "Sounds/enemyDeath.ogg", DataType.Stream);
+        enemyDeathSound.setLooping(false);
+        enemyDeathSound.setPositional(false);
+        enemyDeathSound.setVolume(1);
+        enemyDeathSound.setPitch(1.8f);
+        rootNode.attachChild(enemyDeathSound);
+        
     }
     
     @Override
     public void simpleUpdate(float tpf) {
         updateEnemies(tpf);
         handleMovement(tpf);
+        handleSpawnEnemies(tpf,0.8f);
+    }
+    
+    public void handleSpawnEnemies(float tpf,float spawnInterval){
+        timeElapsed += tpf;
+        if (timeElapsed >= currentSpawnInterval) {
+            timeElapsed = 0;
+            numEnemiesToSpawn++;
+            spawnEnemies(1); // Genera un nuevo enemigo cada intervalo de tiempo
+
+            // Reduce el intervalo de generación gradualmente
+            currentSpawnInterval *= spawnInterval; // Ajusta este factor según tus preferencias
+            currentSpawnInterval = Math.max(currentSpawnInterval, 0.5f); // Asegura que el intervalo no sea menor a 1 segundo
+        }
     }
     
     private AnimComposer findAnimComposer(Node node) {

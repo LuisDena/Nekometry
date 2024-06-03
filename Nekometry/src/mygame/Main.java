@@ -39,6 +39,7 @@ import com.jme3.texture.Texture;
 import com.jme3.ui.Picture;
 import java.util.Random;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 public class Main extends SimpleApplication {
@@ -94,6 +95,7 @@ public class Main extends SimpleApplication {
     private static final float DASH_SPEED_MULTIPLIER = 4f; // Multiplicador de velocidad durante el dash
     
     private BitmapFont myFont;
+    private BitmapText controlsText;
     
 
     public static void main(String[] args) {
@@ -123,6 +125,7 @@ public class Main extends SimpleApplication {
         myFont = assetManager.loadFont("Font/upheaval.fnt");
         
         //setupSky();
+        setupControls();
         setupTimer();
         setupScore();
         spawnEnemies(numEnemiesToSpawn);
@@ -151,6 +154,23 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(sky);
     }
     */
+    
+    private void setupControls(){
+        String controlsInfo = "WASD: Moverse\nSpace: Saltar\nLShift: Dash\nMouse Left: Disparar";
+        controlsText = new BitmapText(myFont, false);
+        controlsText.setSize(myFont.getCharSet().getRenderedSize());
+        controlsText.setSize(24);
+        controlsText.setColor(ColorRGBA.White);
+        
+        controlsText.setText(controlsInfo);
+        controlsText.setLocalTranslation(10, 100, 0); // Posición en la esquina inferior izquierda
+        guiNode.attachChild(controlsText);
+
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+        executor.schedule(() -> {
+            enqueue(() -> guiNode.detachChild(controlsText));
+        }, 10, TimeUnit.SECONDS);
+    }
     
     private void setupHearts(){
         hearts = new Picture[MAX_HEARTS];

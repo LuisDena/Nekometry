@@ -61,9 +61,9 @@ public class Main extends SimpleApplication {
     private BulletAppState fisica; // Declaración de la variable bulletAppState
     
     private long lastShootTime = 0;
-    private static final long SHOOT_COOLDOWN = 500; 
+    private static final long SHOOT_COOLDOWN = 200; 
 
-    private int hitCount = 0;
+    //private int hitCount = 0;
     private static final int MAX_HITS = 2; // Define el máximo de golpes para eliminar al enemigo
     private float timeElapsed = 0;
     private int numEnemiesToSpawn = 1;
@@ -71,7 +71,7 @@ public class Main extends SimpleApplication {
     private float currentSpawnInterval = SPAWN_INTERVAL;
     
     private int portalCollisionCount = 0;
-    private static final int MAX_PORTAL_COLLISIONS = 3;
+    private static final int MAX_PORTAL_COLLISIONS = 5;
     
     private AudioNode backgroundMusic;
     private AudioNode walkSound;
@@ -80,6 +80,7 @@ public class Main extends SimpleApplication {
     private AudioNode hitSound;
     private AudioNode enemyDeathSound;
     private AudioNode healthDownSound;
+    private AudioNode warningHealthSound;
     
     private float timer = 0.0f;
     private BitmapText timerText;
@@ -87,7 +88,7 @@ public class Main extends SimpleApplication {
     private BitmapText scoreText;
     
     private Picture[] hearts;
-    private static final int MAX_HEARTS = 3;        
+    private static final int MAX_HEARTS = 5;        
     
     private boolean isDashing = false; // Nueva variable para controlar el estado de dash
     private static final float DASH_SPEED_MULTIPLIER = 4f; // Multiplicador de velocidad durante el dash
@@ -132,10 +133,9 @@ public class Main extends SimpleApplication {
         setupBoundaries();
         setupCamera();
         setupCollisionListener();
-        setupHearts();
         handleBackgroundMusic();
         handleSounds();
-        
+        setupHearts();
     }
     
     /*private void setupSky(){
@@ -151,6 +151,7 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(sky);
     }
     */
+    
     private void setupHearts(){
         hearts = new Picture[MAX_HEARTS];
         for (int i = 0; i < MAX_HEARTS; i++) {
@@ -161,6 +162,7 @@ public class Main extends SimpleApplication {
             hearts[i].setPosition(10 + i * 60, settings.getHeight() - 60);
             guiNode.attachChild(hearts[i]);
         }
+        
     }
     
     private void setupTimer() {
@@ -236,13 +238,14 @@ public class Main extends SimpleApplication {
             
             // Inicializar el contador de golpes
             enemy.setUserData("hitCount", 0);
+            enemy.setUserData("isEliminated", false);
 
             // Seleccionar un punto de generación aleatorio de la lista
             Vector3f spawnPoint = spawnPoints[random.nextInt(spawnPoints.length)];
             enemy.setLocalTranslation(spawnPoint);
 
             // Asignar una velocidad aleatoria entre 2f y 6f
-            enemy.setUserData("speed", 3f + random.nextFloat() * 5f);
+            enemy.setUserData("speed", 3f + random.nextFloat() * 6f);
 
             // Crear una forma de colisión para el enemigo
             CollisionShape enemyShape = CollisionShapeFactory.createBoxShape(enemy);
@@ -449,9 +452,29 @@ public class Main extends SimpleApplication {
                     handleEnemyReachedPortal(nodeA);
                 } else if (nodeB.getName().equals("enemy") && nodeA.getName().equals("portal_node")) {
                     handleEnemyReachedPortal(nodeB);
+                }// Comprobar si el jugador colisionó con un enemigo
+                else if ((nodeA.getName().equals("sown_node") && nodeB.getName().equals("enemy"))
+                        || (nodeB.getName().equals("sown_node") && nodeA.getName().equals("enemy"))) {
+                    Spatial enemy = nodeA.getName().equals("enemy") ? nodeA : nodeB;
+                    handlePlayerEnemyCollision(enemy);
                 }
             }
         });
+    }
+    
+    private void handlePlayerEnemyCollision(Spatial enemy){
+        // Eliminar el enemigo
+        // Reproducir un sonido de eliminación de enemigo
+        enemyDeathSound.play();
+        rootNode.detachChild(enemy);
+        fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
+        // Incrementar el puntaje solo si el enemigo no ha sido eliminado previamente
+        Boolean isEliminated = enemy.getUserData("isEliminated");
+        if (isEliminated == null || !isEliminated) {
+            score += 250;
+            scoreText.setText("Score: " + score);
+            enemy.setUserData("isEliminated", true);
+        }
     }
     
     private void handleEnemyReachedPortal(Spatial enemy) {
@@ -467,6 +490,9 @@ public class Main extends SimpleApplication {
                 hearts[i].setImage(assetManager, "Interface/heart_empty.png", true);
             }
         }
+        if (remainingHearts<=2){
+            warningHealthSound.play();
+        }
 
         // Eliminar el enemigo
         rootNode.detachChild(enemy);
@@ -479,13 +505,13 @@ public class Main extends SimpleApplication {
     }
     
     private void onPlayerLose() {
-        System.out.println("¡Has perdido! Los enemigos han alcanzado el portal 3 veces.");
+        System.out.println("¡Has perdido! Los enemigos han alcanzado el portal 5 veces.");
         stop();
     }
     
     private void handleEnemyHit(Spatial enemy, Spatial projectile) {
         // Obtener el contador de golpes actual del enemigo
-        hitCount = enemy.getUserData("hitCount");
+        int hitCount = enemy.getUserData("hitCount");
 
         // Incrementar el contador de golpes
         hitCount++;
@@ -499,16 +525,15 @@ public class Main extends SimpleApplication {
         fisica.getPhysicsSpace().remove(projectile.getControl(RigidBodyControl.class));
 
         // Verificar si el enemigo ha sido golpeado dos veces
-        if (hitCount >= MAX_HITS) {
+        if (hitCount == MAX_HITS) {
             // Eliminar el enemigo
             enemyDeathSound.play();
             rootNode.detachChild(enemy);
             fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
-            score += 100; // Incrementa el puntaje en 10 puntos por cada enemigo eliminado
+            score += 100; // Incrementa el puntaje en 100 puntos por cada enemigo eliminado
             scoreText.setText("Score: " + score);
-            // Reiniciar el contador de golpes solo para este enemigo
-            enemy.setUserData("hitCount", 0);
         }
+        hitCount=0;
     }
     
     public void handleProjectileAttack() {
@@ -525,6 +550,7 @@ public class Main extends SimpleApplication {
             Material projectileMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
             projectileMat.setColor("Color", ColorRGBA.Magenta);
             projectile.setMaterial(projectileMat);
+            
 
             Vector3f playerPos = sown.getWorldTranslation();
             Vector3f projectilePos = playerPos.add(cam.getDirection().mult(2f)).addLocal(0, 1f, 0f);
@@ -538,6 +564,7 @@ public class Main extends SimpleApplication {
             shootSound.play();
             rootNode.attachChild(projectile);
             fisica.getPhysicsSpace().add(projectileControl);
+            
             // Crea un executor para gestionar la eliminación del proyectil después de 2 segundos
             ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
             executor.schedule(() -> {
@@ -619,7 +646,7 @@ public class Main extends SimpleApplication {
         backgroundMusic = new AudioNode(assetManager, "Music/MusicaFondo.ogg", DataType.Stream);
         backgroundMusic.setLooping(true);  // Reproducir en bucle
         backgroundMusic.setPositional(false);  // No espacial
-        backgroundMusic.setVolume(0.05f);  // Volumen de la música
+        backgroundMusic.setVolume(0.1f);  // Volumen de la música
         rootNode.attachChild(backgroundMusic);
         backgroundMusic.play();  // Reproducir la música
     }
@@ -668,6 +695,13 @@ public class Main extends SimpleApplication {
         healthDownSound.setVolume(1);
         healthDownSound.setPitch(0.8f);
         rootNode.attachChild(healthDownSound);
+        
+        warningHealthSound = new AudioNode(assetManager, "Sounds/alarm.ogg", DataType.Stream);
+        warningHealthSound.setLooping(true);
+        warningHealthSound.setPositional(false);
+        warningHealthSound.setVolume(0.7f);
+        warningHealthSound.setPitch(1.25f);
+        rootNode.attachChild(warningHealthSound);
     }
     
     @Override
@@ -677,11 +711,13 @@ public class Main extends SimpleApplication {
         handleMovement(tpf);
         handleSpawnEnemies(tpf,0.8f);
     }
+    
     private void updateTimer(float tpf) {
         timer += tpf;
         int seconds = (int) timer;
         timerText.setText("Time: " + seconds);
     }
+    
     public void handleSpawnEnemies(float tpf,float spawnInterval){
         timeElapsed += tpf;
         if (timeElapsed >= currentSpawnInterval) {
@@ -716,6 +752,5 @@ public class Main extends SimpleApplication {
     @Override
     public void simpleRender(RenderManager rm) {
         // TODO: add render code
-        
     }
 }

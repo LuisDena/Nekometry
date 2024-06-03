@@ -12,6 +12,8 @@ import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.effect.ParticleEmitter;
 import com.jme3.effect.ParticleMesh;
+import com.jme3.font.BitmapFont;
+import com.jme3.font.BitmapText;
 import com.jme3.input.KeyInput;
 import com.jme3.input.MouseInput;
 import com.jme3.input.controls.ActionListener;
@@ -34,6 +36,7 @@ import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
 import com.jme3.util.SkyFactory;
 import com.jme3.texture.Texture;
+import com.jme3.ui.Picture;
 import java.util.Random;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -43,6 +46,7 @@ public class Main extends SimpleApplication {
     private Node sown;
     private CameraNode camNode;
     private BetterCharacterControl playerSown;
+    
     
     // Controles
     private boolean adelante=false,atras=false,izq=false,der=false, jump=false;
@@ -73,17 +77,28 @@ public class Main extends SimpleApplication {
     private AudioNode walkSound;
     private AudioNode dashSound;
     private AudioNode shootSound;
-    
     private AudioNode hitSound;
     private AudioNode enemyDeathSound;
+    private AudioNode healthDownSound;
+    
+    private float timer = 0.0f;
+    private BitmapText timerText;
+    private int score = 0;
+    private BitmapText scoreText;
+    
+    private Picture[] hearts;
+    private static final int MAX_HEARTS = 3;        
     
     private boolean isDashing = false; // Nueva variable para controlar el estado de dash
     private static final float DASH_SPEED_MULTIPLIER = 4f; // Multiplicador de velocidad durante el dash
+    
+    private BitmapFont myFont;
     
 
     public static void main(String[] args) {
         
         AppSettings settings = new AppSettings(true);
+        
         settings.setTitle("Nekometry");
         settings.setSettingsDialogImage("Interface/NekoIcon.png");
         settings.setVSync(false);
@@ -97,13 +112,18 @@ public class Main extends SimpleApplication {
     @Override
     public void simpleInitApp() {
         
+        
+        setDisplayStatView(false);
+        setDisplayFps(false);
         /** Set up Physics */
         fisica = new BulletAppState();
         stateManager.attach(fisica);
         //fisica.setDebugEnabled(true);
-        
+        myFont = assetManager.loadFont("Font/upheaval.fnt");
         
         //setupSky();
+        setupTimer();
+        setupScore();
         spawnEnemies(numEnemiesToSpawn);
         setupKeys();
         setupPlayer();
@@ -112,6 +132,7 @@ public class Main extends SimpleApplication {
         setupBoundaries();
         setupCamera();
         setupCollisionListener();
+        setupHearts();
         handleBackgroundMusic();
         handleSounds();
         
@@ -130,6 +151,38 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(sky);
     }
     */
+    private void setupHearts(){
+        hearts = new Picture[MAX_HEARTS];
+        for (int i = 0; i < MAX_HEARTS; i++) {
+            hearts[i] = new Picture("Heart" + i);
+            hearts[i].setImage(assetManager, "Interface/heart.png", true);
+            hearts[i].setWidth(50);
+            hearts[i].setHeight(50);
+            hearts[i].setPosition(10 + i * 60, settings.getHeight() - 60);
+            guiNode.attachChild(hearts[i]);
+        }
+    }
+    
+    private void setupTimer() {
+        timerText = new BitmapText(myFont,false);
+        timerText.setSize(myFont.getCharSet().getRenderedSize());
+        timerText.setSize(24);
+        timerText.setColor(ColorRGBA.White);
+        
+        // Ajusta la posición horizontal y vertical
+        timerText.setLocalTranslation(settings.getWidth() - 120, 50, 0); 
+        guiNode.attachChild(timerText);
+    }
+    
+    private void setupScore() {
+        scoreText = new BitmapText(myFont,false);
+        scoreText.setSize(24);
+        scoreText.setColor(ColorRGBA.White);
+        scoreText.setText("Score: 0");
+        scoreText.setLocalTranslation(settings.getWidth() - 150, settings.getHeight() - 10, 0);
+        guiNode.attachChild(scoreText);
+    }
+    
     private void setupPlayer() {
         Spatial sown_model = assetManager.loadModel("Models/Sown/SownFinal.j3o");
 
@@ -404,11 +457,21 @@ public class Main extends SimpleApplication {
     private void handleEnemyReachedPortal(Spatial enemy) {
         // Incrementar el contador de colisiones con el portal
         portalCollisionCount++;
+        // Actualizar los corazones
+        int remainingHearts = MAX_PORTAL_COLLISIONS - portalCollisionCount;
+        for (int i = 0; i < MAX_HEARTS; i++) {
+            if (i < remainingHearts) {
+                hearts[i].setImage(assetManager, "Interface/heart.png", true);
+            } else {
+                healthDownSound.play();
+                hearts[i].setImage(assetManager, "Interface/heart_empty.png", true);
+            }
+        }
 
         // Eliminar el enemigo
         rootNode.detachChild(enemy);
         fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
-
+        
         // Verificar si el contador de colisiones con el portal ha alcanzado el límite
         if (portalCollisionCount >= MAX_PORTAL_COLLISIONS) {
             onPlayerLose();
@@ -441,6 +504,8 @@ public class Main extends SimpleApplication {
             enemyDeathSound.play();
             rootNode.detachChild(enemy);
             fisica.getPhysicsSpace().remove(enemy.getControl(RigidBodyControl.class));
+            score += 100; // Incrementa el puntaje en 10 puntos por cada enemigo eliminado
+            scoreText.setText("Score: " + score);
             // Reiniciar el contador de golpes solo para este enemigo
             enemy.setUserData("hitCount", 0);
         }
@@ -590,7 +655,6 @@ public class Main extends SimpleApplication {
         hitSound.setPitch(1.3f);
         rootNode.attachChild(hitSound);
         
-        
         enemyDeathSound = new AudioNode(assetManager, "Sounds/enemyDeath.ogg", DataType.Stream);
         enemyDeathSound.setLooping(false);
         enemyDeathSound.setPositional(false);
@@ -598,15 +662,26 @@ public class Main extends SimpleApplication {
         enemyDeathSound.setPitch(1.8f);
         rootNode.attachChild(enemyDeathSound);
         
+        healthDownSound = new AudioNode(assetManager, "Sounds/healthdown.ogg", DataType.Stream);
+        healthDownSound.setLooping(false);
+        healthDownSound.setPositional(false);
+        healthDownSound.setVolume(1);
+        healthDownSound.setPitch(0.8f);
+        rootNode.attachChild(healthDownSound);
     }
     
     @Override
     public void simpleUpdate(float tpf) {
+        updateTimer(tpf);
         updateEnemies(tpf);
         handleMovement(tpf);
         handleSpawnEnemies(tpf,0.8f);
     }
-    
+    private void updateTimer(float tpf) {
+        timer += tpf;
+        int seconds = (int) timer;
+        timerText.setText("Time: " + seconds);
+    }
     public void handleSpawnEnemies(float tpf,float spawnInterval){
         timeElapsed += tpf;
         if (timeElapsed >= currentSpawnInterval) {
@@ -615,7 +690,7 @@ public class Main extends SimpleApplication {
             spawnEnemies(1); // Genera un nuevo enemigo cada intervalo de tiempo
 
             // Reduce el intervalo de generación gradualmente
-            currentSpawnInterval *= spawnInterval; // Ajusta este factor según tus preferencias
+            currentSpawnInterval *= spawnInterval; 
             currentSpawnInterval = Math.max(currentSpawnInterval, 0.5f); // Asegura que el intervalo no sea menor a 1 segundo
         }
     }

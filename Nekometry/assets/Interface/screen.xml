@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nifty xmlns="http://nifty-gui.lessvoid.com/nifty-gui"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://nifty-gui.lessvoid.com/nifty-gui http://nifty-gui.lessvoid.com/nifty-gui/nifty-1.3.xsd">
+
+    <useStyles filename="nifty-default-styles.xml" />
+    <useControls filename="nifty-default-controls.xml" />
+
+    <screen id="start" controller="mygame.StartScreenController">
+        <layer id="background" backgroundColor="#000f" childLayout="center">
+            <image filename="textures/background.jpg" />
+        </layer>
+
+        <layer id="foreground" backgroundColor="#0000" childLayout="vertical">
+            <panel id="panel_top" height="25%" width="100%" align="center" childLayout="center">
+                <text text="Nekometry" font="aurulent-sans-16.fnt" width="100%" height="100%" />
+            </panel>
+
+            <panel id="panel_mid" height="50%" width="75%" align="center" childLayout="center">
+                <control name="dropDown" id="difficulty" width="150px" />
+                <control name="button" label="Iniciar Juego" id="startButton" align="center" valign="center" width="150px">
+                    <interact onClick="startGame()" />
+                </control>
+                <control name="button" label="Salir" id="exitButton" align="center" valign="center" width="150px">
+                    <interact onClick="exitGame()" />
+                </control>
+            </panel>
+
+            <panel id="panel_bottom" height="25%" width="100%" align="center" childLayout="center">
+                <text text="© 2024 Nekometry" font="aurulent-sans-16.fnt" width="100%" height="100%" />
+            </panel>
+        </layer>
+    </screen>
+</nifty>

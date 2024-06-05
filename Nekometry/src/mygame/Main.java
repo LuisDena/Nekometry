@@ -75,6 +75,7 @@ public class Main extends SimpleApplication {
     private static final int MAX_PORTAL_COLLISIONS = 5;
     
     private AudioNode backgroundMusic;
+    private AudioNode gameOverMusic;
     private AudioNode walkSound;
     private AudioNode dashSound;
     private AudioNode shootSound;
@@ -96,6 +97,8 @@ public class Main extends SimpleApplication {
     
     private BitmapFont myFont;
     private BitmapText controlsText;
+    
+    private boolean gameOver=false;
     
 
     public static void main(String[] args) {
@@ -525,8 +528,55 @@ public class Main extends SimpleApplication {
     }
     
     private void onPlayerLose() {
-        System.out.println("¡Has perdido! Los enemigos han alcanzado el portal 5 veces.");
-        stop();
+        gameOver = true;
+        showGameOverScreen();
+    }
+    
+    private void showGameOverScreen() {
+        gameOverMusic.play();
+        // Detener la música de fondo
+        backgroundMusic.stop();
+        // Desactivar los controles del personaje
+        rootNode.detachChild(sown);
+        flyCam.setEnabled(false);
+        
+        
+        walkSound.stop();
+        dashSound.stop();
+        shootSound.stop();
+        hitSound.stop();
+        enemyDeathSound.stop();
+        healthDownSound.stop();
+        warningHealthSound.stop();
+
+        // Ocultar los elementos del HUD
+        guiNode.detachChild(timerText);
+        guiNode.detachChild(scoreText);
+        for (Picture heart : hearts) {
+            guiNode.detachChild(heart);
+        }
+
+        // Mostrar el puntaje y tiempo final
+        BitmapText gameOverText = new BitmapText(myFont, false);
+        gameOverText.setSize(48);
+        gameOverText.setColor(ColorRGBA.Red);
+        gameOverText.setText("Game Over");
+        gameOverText.setLocalTranslation(settings.getWidth() / 2 - gameOverText.getLineWidth() / 2, settings.getHeight() / 2 + 50, 0);
+        guiNode.attachChild(gameOverText);
+
+        BitmapText finalScoreText = new BitmapText(myFont, false);
+        finalScoreText.setSize(36);
+        finalScoreText.setColor(ColorRGBA.White);
+        finalScoreText.setText("Final Score: " + score);
+        finalScoreText.setLocalTranslation(settings.getWidth() / 2 - finalScoreText.getLineWidth() / 2, settings.getHeight() / 2, 0);
+        guiNode.attachChild(finalScoreText);
+
+        BitmapText finalTimeText = new BitmapText(myFont, false);
+        finalTimeText.setSize(36);
+        finalTimeText.setColor(ColorRGBA.White);
+        finalTimeText.setText("Time: " + (int) timer);
+        finalTimeText.setLocalTranslation(settings.getWidth() / 2 - finalTimeText.getLineWidth() / 2, settings.getHeight() / 2 - 50, 0);
+        guiNode.attachChild(finalTimeText);
     }
     
     private void handleEnemyHit(Spatial enemy, Spatial projectile) {
@@ -557,6 +607,10 @@ public class Main extends SimpleApplication {
     }
     
     public void handleProjectileAttack() {
+        if(gameOver){
+            return;
+        }
+        
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastShootTime < SHOOT_COOLDOWN) {
             return; // Salir si el cooldown no ha terminado
@@ -610,6 +664,10 @@ public class Main extends SimpleApplication {
     
     private void handleMovement(float tpf) {
         // Calcula la dirección de movimiento basada en la entrada del usuario
+        if(gameOver){
+            return;
+        }
+        
         Vector3f moveDirection = new Vector3f(0, 0, 0);
         if (adelante) {
             Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
@@ -669,6 +727,8 @@ public class Main extends SimpleApplication {
         backgroundMusic.setVolume(0.1f);  // Volumen de la música
         rootNode.attachChild(backgroundMusic);
         backgroundMusic.play();  // Reproducir la música
+        
+        
     }
     
     private void handleSounds(){
@@ -722,14 +782,23 @@ public class Main extends SimpleApplication {
         warningHealthSound.setVolume(0.7f);
         warningHealthSound.setPitch(1.25f);
         rootNode.attachChild(warningHealthSound);
+        
+        // Cargar y reproducir música de fondo
+        gameOverMusic = new AudioNode(assetManager, "Music/gameOver.ogg", DataType.Stream);
+        gameOverMusic.setLooping(true);  // Reproducir en bucle
+        gameOverMusic.setPositional(false);  // No espacial
+        gameOverMusic.setVolume(0.1f);  // Volumen de la música
+        rootNode.attachChild(gameOverMusic);
     }
     
     @Override
     public void simpleUpdate(float tpf) {
-        updateTimer(tpf);
-        updateEnemies(tpf);
-        handleMovement(tpf);
-        handleSpawnEnemies(tpf,0.8f);
+        if (!gameOver) {
+            updateEnemies(tpf);
+            updateTimer(tpf);
+            handleMovement(tpf);
+            handleSpawnEnemies(tpf, 0.8f);
+        }
     }
     
     private void updateTimer(float tpf) {
@@ -765,7 +834,6 @@ public class Main extends SimpleApplication {
                 }
             }
         }
-
         return null;
     }
     

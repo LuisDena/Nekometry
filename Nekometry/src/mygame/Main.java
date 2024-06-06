@@ -99,6 +99,9 @@ public class Main extends SimpleApplication {
     private BitmapText controlsText;
     
     private boolean gameOver=false;
+    private float countdownTimer;
+    private BitmapText countdownText;
+    
     
 
     public static void main(String[] args) {
@@ -127,7 +130,7 @@ public class Main extends SimpleApplication {
         //fisica.setDebugEnabled(true);
         myFont = assetManager.loadFont("Font/upheaval.fnt");
         
-        //setupSky();
+        
         setupControls();
         setupTimer();
         setupScore();
@@ -135,6 +138,7 @@ public class Main extends SimpleApplication {
         setupKeys();
         setupPlayer();
         setupLight();
+        
         setupMap();
         setupBoundaries();
         setupCamera();
@@ -142,21 +146,24 @@ public class Main extends SimpleApplication {
         handleBackgroundMusic();
         handleSounds();
         setupHearts();
+        setupSky();
     }
     
-    /*private void setupSky(){
+    private void setupSky(){
         // Cargar las texturas del cubemap
-        Texture west = assetManager.loadTexture("Textures/Skybox/west.jpg");
-        Texture east = assetManager.loadTexture("Textures/Skybox/east.jpg");
-        Texture north = assetManager.loadTexture("Textures/Skybox/north.jpg");
-        Texture south = assetManager.loadTexture("Textures/Skybox/south.jpg");
-        Texture down = assetManager.loadTexture("Textures/Skybox/down.jpg");
-
+        Texture west = assetManager.loadTexture("Textures/fondo.png");
+        Texture east = assetManager.loadTexture("Textures/fondo.png");
+        Texture north = assetManager.loadTexture("Textures/fondo.png");
+        Texture south = assetManager.loadTexture("Textures/fondo.png");
+        Texture down = assetManager.loadTexture("Textures/fondo.png");
+        Texture up = assetManager.loadTexture("Textures/fondo.png");
+        
         // Crear el skybox
         Spatial sky = SkyFactory.createSky(assetManager, west, east, north, south, up, down);
+        sky.setShadowMode(ShadowMode.Off);
         rootNode.attachChild(sky);
     }
-    */
+    
     
     private void setupControls(){
         String controlsInfo = "WASD: Moverse\nSpace: Saltar\nLShift: Dash\nMouse Left: Disparar";
@@ -281,6 +288,7 @@ public class Main extends SimpleApplication {
             rootNode.attachChild(enemy); // Agregar el enemigo al nodo principal de la escena
         }
     }
+    
     
     private void updateEnemies(float tpf) {
         Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation(); // Obtener la posición del portal
@@ -409,7 +417,7 @@ public class Main extends SimpleApplication {
         // Luz direccional principal
         DirectionalLight mainLight = new DirectionalLight();
         mainLight.setColor(ColorRGBA.White.mult(0.5f)); // Aumentar la intensidad para una iluminación más brillante
-        mainLight.setDirection(new Vector3f(-0.5f, -0.5f, -0.5f).normalizeLocal());
+        mainLight.setDirection(new Vector3f(-5.5f, -5.5f, -5.5f).normalizeLocal());
         rootNode.addLight(mainLight);
 
         // Configurar sombras en la luz direccional
@@ -577,6 +585,17 @@ public class Main extends SimpleApplication {
         finalTimeText.setText("Time: " + (int) timer);
         finalTimeText.setLocalTranslation(settings.getWidth() / 2 - finalTimeText.getLineWidth() / 2, settings.getHeight() / 2 - 50, 0);
         guiNode.attachChild(finalTimeText);
+        
+        // Iniciar la cuenta regresiva
+        countdownText = new BitmapText(myFont, false);
+        countdownText.setSize(36);
+        countdownText.setColor(ColorRGBA.White);
+        countdownText.setLocalTranslation(settings.getWidth() / 2 - countdownText.getLineWidth() / 2, settings.getHeight() / 2 - 150, 0);
+        guiNode.attachChild(countdownText);
+
+        // Iniciar la cuenta regresiva
+        countdownTimer=10.0f;
+        countdownText.setText("Closing in: " + countdownTimer);
     }
     
     private void handleEnemyHit(Spatial enemy, Spatial projectile) {
@@ -664,35 +683,47 @@ public class Main extends SimpleApplication {
     
     private void handleMovement(float tpf) {
         // Calcula la dirección de movimiento basada en la entrada del usuario
+        AnimComposer animacion = findAnimComposer(sown);
+        
         if(gameOver){
             return;
         }
-        
+        //findAnimComposer(sown).setCurrentAction("Caminata");
         Vector3f moveDirection = new Vector3f(0, 0, 0);
         if (adelante) {
+            
             Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camDir);
+            
             walkSound.play();
         }
         if (atras) {
             Vector3f camOppositeDir = cam.getDirection().negate().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camOppositeDir);
+            
             walkSound.play();
         }
         if (izq) {
             Vector3f camLeft = cam.getLeft().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camLeft);
-             walkSound.play();
+           
+            walkSound.play();
         }
         if (der) {
             Vector3f camRight = cam.getLeft().negate().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camRight);
+            
             walkSound.play();
         }
+        
+        //findAnimComposer(sown).reset();
+        
         if (jump) {// Manejar el salto
             if (playerSown.isOnGround()) { // Salta solo si está en el suelo
                 playerSown.jump();
+                
             }
+            
             jump = false; // Resetea el estado de salto
         }
         
@@ -798,6 +829,19 @@ public class Main extends SimpleApplication {
             updateTimer(tpf);
             handleMovement(tpf);
             handleSpawnEnemies(tpf, 0.8f);
+        }else {
+            // Actualizar la cuenta regresiva
+            updateCountDownTimer(tpf);
+        }
+    }
+    
+    private void updateCountDownTimer(float tpf){
+        countdownTimer -= tpf;
+        if (countdownTimer <= 0) {
+            this.stop();
+        } else {
+            int countdown = (int) Math.ceil(countdownTimer);
+            countdownText.setText("Closing in: " + countdown);
         }
     }
     
@@ -822,7 +866,7 @@ public class Main extends SimpleApplication {
     
     private AnimComposer findAnimComposer(Node node) {
         if (node.getControl(AnimComposer.class) != null) {
-            System.out.println("AnimComposer encontrado en el nodo: " + node.getName());
+            //System.out.println("AnimComposer encontrado en el nodo: " + node.getName());
             return node.getControl(AnimComposer.class);
         }
 

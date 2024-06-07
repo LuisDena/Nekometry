@@ -1,6 +1,9 @@
 package mygame;
 
 import com.jme3.anim.AnimComposer;
+import com.jme3.anim.tween.Tween;
+import com.jme3.anim.tween.Tweens;
+import com.jme3.anim.tween.action.Action;
 import com.jme3.app.SimpleApplication;
 import com.jme3.audio.AudioData.DataType;
 import com.jme3.audio.AudioNode;
@@ -56,6 +59,7 @@ public class Main extends SimpleApplication {
     private Node portal;
     // Animaciones
     private AnimComposer animComposer;
+    private Action caminataAction, saltoAction, dashAction;
     
     private float velocidad = 15f; // Velocidad de movimiento
 
@@ -164,7 +168,6 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(sky);
     }
     
-    
     private void setupControls(){
         String controlsInfo = "WASD: Moverse\nSpace: Saltar\nLShift: Dash\nMouse Left: Disparar";
         controlsText = new BitmapText(myFont, false);
@@ -226,10 +229,8 @@ public class Main extends SimpleApplication {
         
         animComposer = findAnimComposer(sown);
         if (animComposer != null) {
-            System.out.println("Animaciones disponibles:");
-            for (String animacion : animComposer.getAnimClipsNames()) {
-                System.out.println("- " + animacion);
-            }
+            animComposer.setCurrentAction("Caminata");
+            animComposer.setGlobalSpeed(1.5f);
         } else {
             System.out.println("El modelo no tiene un AnimComposer.");
         }
@@ -261,53 +262,55 @@ public class Main extends SimpleApplication {
             new Vector3f(-100f, 0.1f, -30f)
         };
 
-        // Generar los enemigos en el punto deseado
         for (int i = 0; i < numEnemies; i++) {
             Spatial enemy = assetManager.loadModel("Models/enemy/enemy.j3o");
             enemy.setName("enemy");
-            
-            // Inicializar el contador de golpes
+
             enemy.setUserData("hitCount", 0);
             enemy.setUserData("isEliminated", false);
 
-            // Seleccionar un punto de generación aleatorio de la lista
             Vector3f spawnPoint = spawnPoints[random.nextInt(spawnPoints.length)];
             enemy.setLocalTranslation(spawnPoint);
 
-            // Asignar una velocidad aleatoria entre 2f y 6f
             enemy.setUserData("speed", 3f + random.nextFloat() * 6f);
 
-            // Crear una forma de colisión para el enemigo
+            // Asignar amplitud y frecuencia aleatorias para el zigzag
+            enemy.setUserData("zigzagAmplitude", random.nextFloat() * 10f);
+            enemy.setUserData("zigzagFrequency", random.nextFloat() * 10f);
+
             CollisionShape enemyShape = CollisionShapeFactory.createBoxShape(enemy);
-            RigidBodyControl enemyControl = new RigidBodyControl(enemyShape, 1f); // Masa de 1f
+            RigidBodyControl enemyControl = new RigidBodyControl(enemyShape, 1f);
             enemy.addControl(enemyControl);
 
-            // Añadir el control de física al espacio de física
             fisica.getPhysicsSpace().add(enemyControl);
 
-            rootNode.attachChild(enemy); // Agregar el enemigo al nodo principal de la escena
+            rootNode.attachChild(enemy);
         }
     }
     
-    
     private void updateEnemies(float tpf) {
-        Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation(); // Obtener la posición del portal
+        Vector3f portalPos = rootNode.getChild("portal_node").getWorldTranslation();
 
-        // Recorrer todos los nodos hijos del rootNode para buscar los cubos de los enemigos
         for (Spatial spatial : rootNode.getChildren()) {
-            if ( spatial.getName() != null && spatial.getName().equals("enemy")) { // Buscar cubos de enemigos
-                // Calcular la dirección hacia la que deben moverse los enemigos (hacia el portal)
+            if (spatial.getName() != null && spatial.getName().equals("enemy")) {
                 Vector3f enemyPos = spatial.getWorldTranslation();
                 Vector3f directionToPortal = portalPos.subtract(enemyPos).normalizeLocal();
 
-                // Obtener la velocidad del enemigo
                 float speed = spatial.getUserData("speed");
 
-                // Mover el cubo del enemigo en la dirección calculada
+                // Obtener amplitud y frecuencia del zigzag del enemigo
+                float zigzagAmplitude = spatial.getUserData("zigzagAmplitude");
+                float zigzagFrequency = spatial.getUserData("zigzagFrequency");
+
+                Vector3f perpendicularDirection = new Vector3f(directionToPortal.z, 0, -directionToPortal.x).normalizeLocal();
+
+                float zigzagOffset = (float) Math.sin(tpf * zigzagFrequency) * zigzagAmplitude;
+
+                Vector3f zigzagMovement = directionToPortal.add(perpendicularDirection.mult(zigzagOffset));
+
                 RigidBodyControl enemyControl = spatial.getControl(RigidBodyControl.class);
                 if (enemyControl != null) {
-                    enemyControl.setLinearVelocity(directionToPortal.mult(speed)); // Multiplicar por la velocidad del enemigo
-                    // Comprobar si el enemigo ha llegado al portal (colisión simple)
+                    enemyControl.setLinearVelocity(zigzagMovement.mult(speed));
                     if (enemyPos.distance(portalPos) < 5.9f) {
                         handleEnemyReachedPortal(spatial);
                     }
@@ -537,7 +540,19 @@ public class Main extends SimpleApplication {
     
     private void onPlayerLose() {
         gameOver = true;
+        clearEnemies();
         showGameOverScreen();
+    }
+    
+    private void clearEnemies() {
+        // Recorrer todos los nodos hijos del rootNode
+        for (Spatial spatial : rootNode.getChildren()) {
+            if (spatial.getName() != null && spatial.getName().equals("enemy")) {
+                // Eliminar el enemigo
+                rootNode.detachChild(spatial);
+                fisica.getPhysicsSpace().remove(spatial.getControl(RigidBodyControl.class));
+            }
+        }
     }
     
     private void showGameOverScreen() {
@@ -685,16 +700,15 @@ public class Main extends SimpleApplication {
         // Calcula la dirección de movimiento basada en la entrada del usuario
         AnimComposer animacion = findAnimComposer(sown);
         
+        
         if(gameOver){
             return;
         }
-        //findAnimComposer(sown).setCurrentAction("Caminata");
+        
         Vector3f moveDirection = new Vector3f(0, 0, 0);
         if (adelante) {
-            
             Vector3f camDir = cam.getDirection().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camDir);
-            
             walkSound.play();
         }
         if (atras) {
@@ -712,21 +726,24 @@ public class Main extends SimpleApplication {
         if (der) {
             Vector3f camRight = cam.getLeft().negate().clone().mult(new Vector3f(1, 0, 1)).normalizeLocal();
             moveDirection.addLocal(camRight);
-            
             walkSound.play();
         }
+        
         
         //findAnimComposer(sown).reset();
         
         if (jump) {// Manejar el salto
+            walkSound.stop();
             if (playerSown.isOnGround()) { // Salta solo si está en el suelo
+                Action salto = animComposer.action("Salto");
+                Tween doneTween = Tweens.callMethod(animComposer, "setCurrentAction", "Caminata");
+                Action saltoOnce = animComposer.actionSequence("SaltoOnce", salto, doneTween);
+                animComposer.setCurrentAction("SaltoOnce");
+                animComposer.setGlobalSpeed(2f);
                 playerSown.jump();
-                
             }
-            
             jump = false; // Resetea el estado de salto
         }
-        
 
         // Normaliza la dirección de movimiento para mantener la misma velocidad en todas las direcciones
         if (!moveDirection.equals(Vector3f.ZERO)) {
@@ -734,6 +751,11 @@ public class Main extends SimpleApplication {
             // Aplicar el multiplicador de velocidad si se está realizando un dash
             float speedMultiplier;
             if (isDashing) {
+                Action dash = animComposer.action("Dash");
+                Tween doneTween = Tweens.callMethod(animComposer, "setCurrentAction", "Caminata");
+                Action DashOnce = animComposer.actionSequence("DashOnce", dash, doneTween);
+                animComposer.setCurrentAction("DashOnce");
+                animComposer.setGlobalSpeed(5f);
                 speedMultiplier = DASH_SPEED_MULTIPLIER;
                 walkSound.stop();
                 dashSound.play();

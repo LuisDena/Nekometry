@@ -106,8 +106,6 @@ public class Main extends SimpleApplication {
     private float countdownTimer;
     private BitmapText countdownText;
     
-    
-
     public static void main(String[] args) {
         
         AppSettings settings = new AppSettings(true);
@@ -115,6 +113,7 @@ public class Main extends SimpleApplication {
         settings.setTitle("Nekometry");
         settings.setSettingsDialogImage("Interface/NekoIcon.png");
         settings.setVSync(false);
+        
         
         Main app = new Main();
         
@@ -275,7 +274,7 @@ public class Main extends SimpleApplication {
             enemy.setUserData("speed", 3f + random.nextFloat() * 6f);
 
             // Asignar amplitud y frecuencia aleatorias para el zigzag
-            enemy.setUserData("zigzagAmplitude", random.nextFloat() * 10f);
+            enemy.setUserData("zigzagAmplitude", random.nextFloat() * 5f);
             enemy.setUserData("zigzagFrequency", random.nextFloat() * 10f);
 
             CollisionShape enemyShape = CollisionShapeFactory.createBoxShape(enemy);
@@ -427,7 +426,7 @@ public class Main extends SimpleApplication {
         DirectionalLightShadowRenderer dlsr = new DirectionalLightShadowRenderer(assetManager, 1024, 3);
         dlsr.setLight(mainLight);
         dlsr.setShadowIntensity(0.5f); // Ajustar la intensidad de las sombras
-        dlsr.setShadowZExtend(150f); // Aumentar la distancia de renderizado de sombras
+        dlsr.setShadowZExtend(110f); // Aumentar la distancia de renderizado de sombras
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.Nearest);
         
         // Ajustar la distancia de atenuación de sombras
@@ -777,7 +776,7 @@ public class Main extends SimpleApplication {
         backgroundMusic = new AudioNode(assetManager, "Music/MusicaFondo.ogg", DataType.Stream);
         backgroundMusic.setLooping(true);  // Reproducir en bucle
         backgroundMusic.setPositional(false);  // No espacial
-        backgroundMusic.setVolume(0.1f);  // Volumen de la música
+        backgroundMusic.setVolume(0.6f);  // Volumen de la música
         rootNode.attachChild(backgroundMusic);
         backgroundMusic.play();  // Reproducir la música
         
@@ -789,7 +788,7 @@ public class Main extends SimpleApplication {
         walkSound = new AudioNode(assetManager, "Sounds/walk.ogg", DataType.Stream);
         walkSound.setLooping(false);
         walkSound.setPositional(false);
-        walkSound.setVolume(0.8f);
+        walkSound.setVolume(1.2f);
         walkSound.setPitch(0.9f);
         
         rootNode.attachChild(walkSound);
@@ -797,14 +796,14 @@ public class Main extends SimpleApplication {
         dashSound = new AudioNode(assetManager, "Sounds/dash.ogg", DataType.Stream);
         dashSound.setLooping(false);
         dashSound.setPositional(false);
-        dashSound.setVolume(1);
+        dashSound.setVolume(1.3f);
         dashSound.setPitch(1.9f);
         rootNode.attachChild(dashSound);
         
         shootSound = new AudioNode(assetManager, "Sounds/shoot.ogg", DataType.Stream);
         shootSound.setLooping(false);
         shootSound.setPositional(false);
-        shootSound.setVolume(1);
+        shootSound.setVolume(2f);
         shootSound.setPitch(2f);
         rootNode.attachChild(shootSound);
         
@@ -832,7 +831,7 @@ public class Main extends SimpleApplication {
         warningHealthSound = new AudioNode(assetManager, "Sounds/alarm.ogg", DataType.Stream);
         warningHealthSound.setLooping(true);
         warningHealthSound.setPositional(false);
-        warningHealthSound.setVolume(0.7f);
+        warningHealthSound.setVolume(1f);
         warningHealthSound.setPitch(1.25f);
         rootNode.attachChild(warningHealthSound);
         
@@ -840,7 +839,7 @@ public class Main extends SimpleApplication {
         gameOverMusic = new AudioNode(assetManager, "Music/gameOver.ogg", DataType.Stream);
         gameOverMusic.setLooping(true);  // Reproducir en bucle
         gameOverMusic.setPositional(false);  // No espacial
-        gameOverMusic.setVolume(0.1f);  // Volumen de la música
+        gameOverMusic.setVolume(0.5f);  // Volumen de la música
         rootNode.attachChild(gameOverMusic);
     }
     
